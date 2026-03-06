@@ -680,6 +680,14 @@ $statusLabels = [
                                 <td class="text-muted">Relation:</td>
                                 <td><?php echo sanitize($emp['emergency_contact_relation'] ?? '-'); ?></td>
                             </tr>
+                            <tr>
+                                <td class="text-muted">Phone:</td>
+                                <td>
+                                    <?php if (!empty($emp['emergency_contact_number'])): ?>
+                                    <a href="tel:<?php echo sanitize($emp['emergency_contact_number']); ?>"><?php echo sanitize($emp['emergency_contact_number']); ?></a>
+                                    <?php else: ?>-<?php endif; ?>
+                                </td>
+                            </tr>
                         </table>
                     </div>
                     <div class="col-md-6 mb-3">
