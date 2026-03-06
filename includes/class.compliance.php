@@ -634,5 +634,85 @@ class Compliance {
         
         return $ecr;
     }
+    
+    // Generate Form V - Register of Workmen
+    public function generateFormV($unitId, $month, $year) {
+        // Get unit name
+        $unit = $this->db->fetch("SELECT name FROM units WHERE id = :id", ['id' => $unitId]);
+        if (!$unit) return [];
+        
+        return $this->db->fetchAll(
+            "SELECT e.*, ess.basic_wage, ess.gross_salary
+             FROM employees e
+             LEFT JOIN employee_salary_structures ess ON e.id = ess.employee_id 
+                AND (ess.effective_to IS NULL OR ess.effective_to >= CURDATE())
+             WHERE e.unit_name = :unit_name 
+             AND e.status IN ('approved', 'pending_hr_verification')
+             ORDER BY e.employee_code",
+            ['unit_name' => $unit['name']]
+        );
+    }
+    
+    // Generate Form XVI - Muster Roll (Attendance Register)
+    public function generateFormXVI($unitId, $month, $year) {
+        // Get unit name
+        $unit = $this->db->fetch("SELECT name FROM units WHERE id = :id", ['id' => $unitId]);
+        if (!$unit) return [];
+        
+        // Try to get attendance data
+        try {
+            return $this->db->fetchAll(
+                "SELECT e.employee_code, e.full_name, e.middle_name, e.father_name, e.designation, e.worker_category,
+                        COALESCE(a.present_days, 0) as present_days,
+                        COALESCE(a.absent_days, 0) as absent_days,
+                        COALESCE(a.weekly_offs, 0) as weekly_offs,
+                        COALESCE(a.holidays, 0) as holidays,
+                        COALESCE(a.total_working_days, 0) as total_working_days,
+                        COALESCE(a.overtime_hours, 0) as total_overtime_hours
+                 FROM employees e
+                 LEFT JOIN attendance a ON e.id = a.employee_id AND MONTH(a.attendance_date) = :month AND YEAR(a.attendance_date) = :year
+                 WHERE e.unit_name = :unit_name 
+                 AND e.status = 'approved'
+                 ORDER BY e.employee_code",
+                ['unit_name' => $unit['name'], 'month' => $month, 'year' => $year]
+            );
+        } catch (Exception $e) {
+            // Return just employees if attendance table doesn't exist
+            return $this->db->fetchAll(
+                "SELECT e.employee_code, e.full_name, e.middle_name, e.father_name, e.designation, e.worker_category,
+                        0 as present_days, 0 as absent_days, 0 as weekly_offs, 0 as holidays, 0 as total_working_days, 0 as total_overtime_hours
+                 FROM employees e
+                 WHERE e.unit_name = :unit_name 
+                 AND e.status = 'approved'
+                 ORDER BY e.employee_code",
+                ['unit_name' => $unit['name']]
+            );
+        }
+    }
+    
+    // Generate Form XVII - Register of Wages
+    public function generateFormXVII($unitId, $periodId) {
+        // Get unit name
+        $unit = $this->db->fetch("SELECT name FROM units WHERE id = :id", ['id' => $unitId]);
+        if (!$unit) return [];
+        
+        // Get period details
+        $period = $this->db->fetch("SELECT * FROM payroll_periods WHERE id = :id", ['id' => $periodId]);
+        if (!$period) return [];
+        
+        try {
+            return $this->db->fetchAll(
+                "SELECT p.*, e.full_name, e.middle_name, e.father_name, e.designation
+                 FROM payroll p
+                 JOIN employees e ON p.employee_code = e.employee_code
+                 WHERE e.unit_name = :unit_name
+                 AND p.payroll_period_id = :period_id
+                 ORDER BY e.employee_code",
+                ['unit_name' => $unit['name'], 'period_id' => $periodId]
+            );
+        } catch (Exception $e) {
+            return [];
+        }
+    }
 }
 ?>

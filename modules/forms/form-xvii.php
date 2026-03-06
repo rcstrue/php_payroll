@@ -147,11 +147,12 @@ if ($unitId && $periodId) {
                                 $totals['pt'] += $emp['professional_tax'];
                                 $totals['ded'] += $emp['total_deductions'];
                                 $totals['net'] += $emp['net_pay'];
+                                $empName = trim($emp['full_name'] . ' ' . ($emp['middle_name'] ?? ''));
                             ?>
                             <tr>
                                 <td class="text-center"><?php echo $sr++; ?></td>
                                 <td><?php echo sanitize($emp['employee_code']); ?></td>
-                                <td><?php echo sanitize($emp['full_name'] . ' ' . ); ?></td>
+                                <td><?php echo sanitize($empName); ?></td>
                                 <td><?php echo sanitize($emp['father_name'] ?? '-'); ?></td>
                                 <td><?php echo sanitize($emp['designation'] ?? '-'); ?></td>
                                 <td class="text-center"><?php echo $emp['paid_days']; ?></td>

@@ -28,10 +28,16 @@ if (!$emp) {
 $stmt = $db->query("SELECT * FROM companies LIMIT 1");
 $company = $stmt->fetch(PDO::FETCH_ASSOC);
 
-// Get family members for ESI
-$stmt = $db->prepare("SELECT * FROM employee_family WHERE employee_id = ?");
-$stmt->execute([$employeeId]);
-$familyMembers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// Get family members for ESI - use try/catch in case table doesn't exist
+$familyMembers = [];
+try {
+    $stmt = $db->prepare("SELECT * FROM employee_family WHERE employee_id = ?");
+    $stmt->execute([$employeeId]);
+    $familyMembers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    // Table doesn't exist, use empty array
+    $familyMembers = [];
+}
 
 // Build full name
 $fullName = trim(($emp['salutation'] ?? '') . ' ' . $emp['full_name'] . ' ' . ($emp['middle_name'] ?? ''));

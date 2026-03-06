@@ -131,11 +131,12 @@ if ($unitId) {
                                 $totals['holiday'] += $emp['holidays'] ?? 0;
                                 $totals['working'] += $emp['total_working_days'] ?? 0;
                                 $totals['ot'] += $emp['total_overtime_hours'] ?? 0;
+                                $empName = trim($emp['full_name'] . ' ' . ($emp['middle_name'] ?? ''));
                             ?>
                             <tr>
                                 <td class="text-center"><?php echo $sr++; ?></td>
                                 <td><?php echo sanitize($emp['employee_code']); ?></td>
-                                <td><?php echo sanitize($emp['full_name'] . ' ' . ); ?></td>
+                                <td><?php echo sanitize($empName); ?></td>
                                 <td><?php echo sanitize($emp['father_name'] ?? '-'); ?></td>
                                 <td><?php echo sanitize($emp['designation'] ?? '-'); ?></td>
                                 <td><?php echo sanitize($emp['worker_category']); ?></td>
