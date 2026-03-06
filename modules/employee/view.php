@@ -1,7 +1,7 @@
 <?php
 /**
  * RCS HRMS Pro - Employee View Page
- * Updated for new database schema
+ * Updated for actual database schema
  */
 
 $pageTitle = 'Employee Details';
@@ -14,7 +14,7 @@ if (!$employeeId) {
     redirect('index.php?page=employee/list');
 }
 
-// Get employee details using the Employee class
+// Get employee details
 $emp = $employee->getById($employeeId);
 
 if (!$emp) {
@@ -22,33 +22,68 @@ if (!$emp) {
     redirect('index.php?page=employee/list');
 }
 
-// Get employee documents
-$documents = $emp['documents'] ?? [];
+// Get salary structure
+$salaryStmt = $db->prepare("SELECT * FROM employee_salary_structures WHERE employee_id = ? AND (effective_to IS NULL OR effective_to >= CURDATE()) ORDER BY effective_from DESC LIMIT 1");
+$salaryStmt->execute([$employeeId]);
+$salary = $salaryStmt->fetch(PDO::FETCH_ASSOC);
 
-// Handle document upload
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_document'])) {
-    $docType = sanitize($_POST['document_type']);
+// Get documents from employee_documents table
+$docStmt = $db->prepare("SELECT * FROM employee_documents WHERE employee_id = ? ORDER BY created_at DESC");
+$docStmt->execute([$employeeId]);
+$documents = $docStmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Handle actions
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? '';
     
-    if (isset($_FILES['document_file']) && $_FILES['document_file']['error'] === UPLOAD_ERR_OK) {
-        $uploadDir = 'uploads/employee_documents/' . $emp['employee_code'] . '/';
+    // Approve employee
+    if ($action === 'approve' && $emp['status'] === 'pending_hr_verification') {
+        $stmt = $db->prepare("UPDATE employees SET status = 'approved', approved_at = NOW(), approved_by = ? WHERE id = ?");
+        $stmt->execute([$_SESSION['user_id'] ?? null, $employeeId]);
+        setFlash('success', 'Employee approved successfully!');
+        redirect('index.php?page=employee/view&id=' . $employeeId);
+    }
+    
+    // Reject employee
+    if ($action === 'reject' && $emp['status'] === 'pending_hr_verification') {
+        $reason = sanitize($_POST['reason'] ?? '');
+        $stmt = $db->prepare("UPDATE employees SET status = 'inactive', leaving_reason = ? WHERE id = ?");
+        $stmt->execute([$reason, $employeeId]);
+        setFlash('success', 'Employee rejected.');
+        redirect('index.php?page=employee/view&id=' . $employeeId);
+    }
+    
+    // Mark as left
+    if ($action === 'mark_left') {
+        $dol = sanitize($_POST['date_of_leaving'] ?? date('Y-m-d'));
+        $reason = sanitize($_POST['reason'] ?? '');
+        $stmt = $db->prepare("UPDATE employees SET status = 'inactive', date_of_leaving = ?, leaving_reason = ? WHERE id = ?");
+        $stmt->execute([$dol, $reason, $employeeId]);
+        setFlash('success', 'Employee marked as left.');
+        redirect('index.php?page=employee/view&id=' . $employeeId);
+    }
+    
+    // Document upload
+    if (isset($_POST['upload_document'])) {
+        $docType = sanitize($_POST['document_type']);
         
-        if (!is_dir(APP_ROOT . '/' . $uploadDir)) {
-            mkdir(APP_ROOT . '/' . $uploadDir, 0755, true);
-        }
-        
-        $fileName = $docType . '_' . time() . '_' . basename($_FILES['document_file']['name']);
-        $filePath = $uploadDir . $fileName;
-        
-        if (move_uploaded_file($_FILES['document_file']['tmp_name'], APP_ROOT . '/' . $filePath)) {
-            // Insert document record
-            $stmt = $db->prepare("INSERT INTO employee_documents (employee_id, document_type, document_name, file_path, file_size, file_type, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?)
-                                  ON DUPLICATE KEY UPDATE file_path = VALUES(file_path), file_size = VALUES(file_size), file_type = VALUES(file_type), uploaded_by = VALUES(uploaded_by)");
-            $stmt->execute([$employeeId, $docType, $fileName, $filePath, $_FILES['document_file']['size'], $_FILES['document_file']['type'], $_SESSION['user_id']]);
+        if (isset($_FILES['document_file']) && $_FILES['document_file']['error'] === UPLOAD_ERR_OK) {
+            $uploadDir = 'uploads/employee_documents/' . $emp['employee_code'] . '/';
             
-            setFlash('success', 'Document uploaded successfully!');
-            redirect('index.php?page=employee/view&id=' . $employeeId);
-        } else {
-            setFlash('error', 'Failed to upload document');
+            if (!is_dir(APP_ROOT . '/' . $uploadDir)) {
+                mkdir(APP_ROOT . '/' . $uploadDir, 0755, true);
+            }
+            
+            $fileName = $docType . '_' . time() . '_' . basename($_FILES['document_file']['name']);
+            $filePath = $uploadDir . $fileName;
+            
+            if (move_uploaded_file($_FILES['document_file']['tmp_name'], APP_ROOT . '/' . $filePath)) {
+                $stmt = $db->prepare("INSERT INTO employee_documents (employee_id, document_type, document_name, file_path, file_size, file_type, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$employeeId, $docType, $fileName, $filePath, $_FILES['document_file']['size'], $_FILES['document_file']['type'], $_SESSION['user_id'] ?? null]);
+                
+                setFlash('success', 'Document uploaded successfully!');
+                redirect('index.php?page=employee/view&id=' . $employeeId);
+            }
         }
     }
 }
@@ -82,6 +117,20 @@ $documentTypes = [
     'Medical Certificate' => 'Medical Certificate',
     'Other' => 'Other Document'
 ];
+
+// Status colors
+$statusColors = [
+    'approved' => 'success',
+    'pending_hr_verification' => 'warning',
+    'inactive' => 'secondary',
+    'terminated' => 'danger'
+];
+$statusLabels = [
+    'approved' => 'Active',
+    'pending_hr_verification' => 'Pending Verification',
+    'inactive' => 'Inactive',
+    'terminated' => 'Terminated'
+];
 ?>
 
 <div class="row">
@@ -90,47 +139,111 @@ $documentTypes = [
         <!-- Employee Photo & Quick Info -->
         <div class="card mb-3">
             <div class="card-body text-center">
-                <?php if (!empty($emp['profile_pic_url']) && file_exists($emp['profile_pic_url'])): ?>
-                <img src="<?php echo sanitize($emp['profile_pic_url']); ?>" alt="Photo" class="rounded-circle mb-2" style="width: 100px; height: 100px; object-fit: cover;">
+                <?php if (!empty($emp['profile_pic_cropped_url'])): ?>
+                <img src="<?php echo sanitize($emp['profile_pic_cropped_url']); ?>" alt="Photo" class="rounded-circle mb-2" style="width: 100px; height: 100px; object-fit: cover; border: 3px solid #dee2e6;">
+                <?php elseif (!empty($emp['profile_pic_url'])): ?>
+                <img src="<?php echo sanitize($emp['profile_pic_url']); ?>" alt="Photo" class="rounded-circle mb-2" style="width: 100px; height: 100px; object-fit: cover; border: 3px solid #dee2e6;">
                 <?php else: ?>
                 <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center mx-auto mb-2" style="width: 100px; height: 100px; font-size: 36px;">
-                    <?php echo substr($emp['full_name'] ?? 'U', 0, 1); ?>
+                    <?php echo strtoupper(substr($emp['full_name'] ?? 'U', 0, 1)); ?>
                 </div>
                 <?php endif; ?>
                 <h5 class="mb-1"><?php echo sanitize($emp['full_name'] ?? '-'); ?></h5>
                 <p class="text-muted mb-2"><code><?php echo sanitize($emp['employee_code']); ?></code></p>
-                <?php 
-                $statusClass = 'secondary';
-                $statusText = $emp['status'] ?? 'Unknown';
-                if ($statusText === 'approved') {
-                    $statusClass = 'success';
-                    $statusText = 'Active';
-                } elseif (strpos($statusText, 'pending') !== false) {
-                    $statusClass = 'warning';
-                    $statusText = 'Pending';
-                } elseif ($statusText === 'inactive' || $statusText === 'terminated') {
-                    $statusClass = 'danger';
-                }
-                ?>
-                <span class="badge bg-<?php echo $statusClass; ?> fs-6"><?php echo sanitize($statusText); ?></span>
+                <span class="badge bg-<?php echo $statusColors[$emp['status']] ?? 'secondary'; ?> fs-6">
+                    <?php echo $statusLabels[$emp['status']] ?? sanitize($emp['status']); ?>
+                </span>
+                <?php if ($emp['status'] === 'approved' && !empty($emp['approved_at'])): ?>
+                <br><small class="text-muted">Approved: <?php echo formatDate($emp['approved_at']); ?></small>
+                <?php endif; ?>
             </div>
         </div>
         
         <!-- Quick Actions -->
         <div class="card mb-3">
-            <div class="card-header">
-                <h6 class="mb-0"><i class="bi bi-lightning me-2"></i>Quick Actions</h6>
+            <div class="card-header bg-primary text-white">
+                <h6 class="mb-0"><i class="bi bi-lightning-fill me-2"></i>Quick Actions</h6>
             </div>
             <div class="card-body p-2">
                 <div class="d-grid gap-2">
+                    <!-- Approve/Reject for pending employees -->
+                    <?php if ($emp['status'] === 'pending_hr_verification'): ?>
+                    <button type="button" class="btn btn-success btn-sm" onclick="approveEmployee()">
+                        <i class="bi bi-check-circle me-2"></i>Approve Employee
+                    </button>
+                    <button type="button" class="btn btn-danger btn-sm" onclick="rejectEmployee()">
+                        <i class="bi bi-x-circle me-2"></i>Reject
+                    </button>
+                    <?php endif; ?>
+                    
+                    <?php if ($emp['status'] === 'approved'): ?>
+                    <button type="button" class="btn btn-warning btn-sm" onclick="markAsLeft()">
+                        <i class="bi bi-person-x me-2"></i>Mark as Left
+                    </button>
+                    <?php endif; ?>
+                    
+                    <hr class="my-2">
+                    
                     <a href="index.php?page=employee/add&id=<?php echo $employeeId; ?>" class="btn btn-outline-primary btn-sm">
                         <i class="bi bi-pencil me-2"></i>Edit Employee
                     </a>
+                    
+                    <hr class="my-2">
+                    
+                    <!-- Forms & Certificates -->
+                    <small class="text-muted fw-bold">FORMS & CERTIFICATES</small>
+                    
                     <a href="index.php?page=forms/appointment&id=<?php echo $employeeId; ?>" class="btn btn-outline-success btn-sm" target="_blank">
                         <i class="bi bi-file-earmark-text me-2"></i>Appointment Letter
                     </a>
+                    
+                    <a href="index.php?page=forms/relieving&id=<?php echo $employeeId; ?>" class="btn btn-outline-info btn-sm" target="_blank">
+                        <i class="bi bi-file-earmark-minus me-2"></i>Relieving Letter
+                    </a>
+                    
+                    <a href="index.php?page=forms/service_certificate&id=<?php echo $employeeId; ?>" class="btn btn-outline-info btn-sm" target="_blank">
+                        <i class="bi bi-award me-2"></i>Service Certificate
+                    </a>
+                    
+                    <a href="index.php?page=forms/experience&id=<?php echo $employeeId; ?>" class="btn btn-outline-info btn-sm" target="_blank">
+                        <i class="bi bi-briefcase me-2"></i>Experience Certificate
+                    </a>
+                    
+                    <hr class="my-2">
+                    
+                    <small class="text-muted fw-bold">STATUTORY FORMS</small>
+                    
+                    <a href="index.php?page=forms/form-v&id=<?php echo $employeeId; ?>" class="btn btn-outline-secondary btn-sm" target="_blank">
+                        <i class="bi bi-file-text me-2"></i>Form V
+                    </a>
+                    
+                    <a href="index.php?page=forms/form-xvi&id=<?php echo $employeeId; ?>" class="btn btn-outline-secondary btn-sm" target="_blank">
+                        <i class="bi bi-file-text me-2"></i>Form XVI
+                    </a>
+                    
+                    <a href="index.php?page=forms/form-xvii&id=<?php echo $employeeId; ?>" class="btn btn-outline-secondary btn-sm" target="_blank">
+                        <i class="bi bi-file-text me-2"></i>Form XVII
+                    </a>
+                    
+                    <hr class="my-2">
+                    
+                    <small class="text-muted fw-bold">NOMINATIONS</small>
+                    
+                    <a href="index.php?page=forms/nomination_pf&id=<?php echo $employeeId; ?>" class="btn btn-outline-warning btn-sm" target="_blank">
+                        <i class="bi bi-file-earmark-person me-2"></i>PF Nomination
+                    </a>
+                    
+                    <a href="index.php?page=forms/nomination_esi&id=<?php echo $employeeId; ?>" class="btn btn-outline-warning btn-sm" target="_blank">
+                        <i class="bi bi-file-earmark-person me-2"></i>ESI Nomination
+                    </a>
+                    
+                    <a href="index.php?page=forms/nomination_gratuity&id=<?php echo $employeeId; ?>" class="btn btn-outline-warning btn-sm" target="_blank">
+                        <i class="bi bi-file-earmark-person me-2"></i>Gratuity Nomination
+                    </a>
+                    
                     <?php if ($emp['status'] === 'approved'): ?>
-                    <a href="index.php?page=payroll/payslips&emp=<?php echo $emp['employee_code']; ?>" class="btn btn-outline-info btn-sm">
+                    <hr class="my-2">
+                    <a href="index.php?page=payroll/payslips&emp=<?php echo $emp['employee_code']; ?>" class="btn btn-outline-primary btn-sm">
                         <i class="bi bi-receipt me-2"></i>View Payslips
                     </a>
                     <?php endif; ?>
@@ -147,19 +260,23 @@ $documentTypes = [
                 <table class="table table-sm table-borderless mb-0">
                     <tr>
                         <td class="text-muted">Gross Salary</td>
-                        <td class="text-end fw-bold"><?php echo formatCurrency($emp['gross_salary'] ?? 0); ?></td>
+                        <td class="text-end fw-bold text-success"><?php echo formatCurrency($salary['gross_salary'] ?? $emp['gross_salary'] ?? 0); ?></td>
                     </tr>
                     <tr>
                         <td class="text-muted">Basic</td>
-                        <td class="text-end"><?php echo formatCurrency($emp['basic_wage'] ?? 0); ?></td>
+                        <td class="text-end"><?php echo formatCurrency($salary['basic_wage'] ?? 0); ?></td>
                     </tr>
                     <tr>
                         <td class="text-muted">DA</td>
-                        <td class="text-end"><?php echo formatCurrency($emp['da'] ?? 0); ?></td>
+                        <td class="text-end"><?php echo formatCurrency($salary['da'] ?? 0); ?></td>
                     </tr>
                     <tr>
                         <td class="text-muted">HRA</td>
-                        <td class="text-end"><?php echo formatCurrency($emp['hra'] ?? 0); ?></td>
+                        <td class="text-end"><?php echo formatCurrency($salary['hra'] ?? 0); ?></td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">Special</td>
+                        <td class="text-end"><?php echo formatCurrency($salary['special_allowance'] ?? 0); ?></td>
                     </tr>
                 </table>
             </div>
@@ -170,7 +287,7 @@ $documentTypes = [
     <div class="col-lg-9 col-md-8">
         <!-- Personal Details -->
         <div class="card mb-3">
-            <div class="card-header">
+            <div class="card-header bg-light">
                 <h6 class="mb-0"><i class="bi bi-person me-2"></i>Personal Details</h6>
             </div>
             <div class="card-body">
@@ -203,13 +320,17 @@ $documentTypes = [
                             <?php endif; ?>
                         </div>
                     </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="text-muted small">Employee Role</label>
+                        <div><?php echo ucfirst(sanitize($emp['employee_role'] ?? 'employee')); ?></div>
+                    </div>
                 </div>
             </div>
         </div>
         
         <!-- Contact Details -->
         <div class="card mb-3">
-            <div class="card-header">
+            <div class="card-header bg-light">
                 <h6 class="mb-0"><i class="bi bi-telephone me-2"></i>Contact Details</h6>
             </div>
             <div class="card-body">
@@ -240,13 +361,13 @@ $documentTypes = [
         
         <!-- Address Details -->
         <div class="card mb-3">
-            <div class="card-header">
+            <div class="card-header bg-light">
                 <h6 class="mb-0"><i class="bi bi-geo-alt me-2"></i>Address Details</h6>
             </div>
             <div class="card-body">
                 <div class="row">
-                    <div class="col-md-12 mb-3">
-                        <label class="text-muted small">Address</label>
+                    <div class="col-md-12 mb-2">
+                        <label class="text-muted small">Full Address</label>
                         <div>
                             <?php 
                             $addr = [];
@@ -258,13 +379,25 @@ $documentTypes = [
                             ?>
                         </div>
                     </div>
+                    <div class="col-md-4">
+                        <label class="text-muted small">State</label>
+                        <div><?php echo sanitize($emp['state'] ?? '-'); ?></div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="text-muted small">District</label>
+                        <div><?php echo sanitize($emp['district'] ?? '-'); ?></div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="text-muted small">Pin Code</label>
+                        <div><?php echo sanitize($emp['pin_code'] ?? '-'); ?></div>
+                    </div>
                 </div>
             </div>
         </div>
         
         <!-- Identity Documents -->
         <div class="card mb-3">
-            <div class="card-header">
+            <div class="card-header bg-light">
                 <h6 class="mb-0"><i class="bi bi-card-heading me-2"></i>Identity Documents</h6>
             </div>
             <div class="card-body">
@@ -297,9 +430,79 @@ $documentTypes = [
             </div>
         </div>
         
+        <!-- Document Images (Aadhaar & Bank) -->
+        <div class="card mb-3">
+            <div class="card-header bg-light">
+                <h6 class="mb-0"><i class="bi bi-image me-2"></i>Document Images</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <!-- Profile Photo -->
+                    <div class="col-md-3 mb-3 text-center">
+                        <label class="text-muted small d-block">Profile Photo</label>
+                        <?php if (!empty($emp['profile_pic_cropped_url'])): ?>
+                        <a href="<?php echo sanitize($emp['profile_pic_cropped_url']); ?>" target="_blank">
+                            <img src="<?php echo sanitize($emp['profile_pic_cropped_url']); ?>" class="img-thumbnail" style="max-height: 120px;">
+                        </a>
+                        <?php elseif (!empty($emp['profile_pic_url'])): ?>
+                        <a href="<?php echo sanitize($emp['profile_pic_url']); ?>" target="_blank">
+                            <img src="<?php echo sanitize($emp['profile_pic_url']); ?>" class="img-thumbnail" style="max-height: 120px;">
+                        </a>
+                        <?php else: ?>
+                        <div class="img-thumbnail d-flex align-items-center justify-content-center bg-light" style="height: 120px;">
+                            <span class="text-muted">No Photo</span>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                    
+                    <!-- Aadhaar Front -->
+                    <div class="col-md-3 mb-3 text-center">
+                        <label class="text-muted small d-block">Aadhaar Front</label>
+                        <?php if (!empty($emp['aadhaar_front_url'])): ?>
+                        <a href="<?php echo sanitize($emp['aadhaar_front_url']); ?>" target="_blank">
+                            <img src="<?php echo sanitize($emp['aadhaar_front_url']); ?>" class="img-thumbnail" style="max-height: 120px;">
+                        </a>
+                        <?php else: ?>
+                        <div class="img-thumbnail d-flex align-items-center justify-content-center bg-light" style="height: 120px;">
+                            <span class="text-muted">Not Uploaded</span>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                    
+                    <!-- Aadhaar Back -->
+                    <div class="col-md-3 mb-3 text-center">
+                        <label class="text-muted small d-block">Aadhaar Back</label>
+                        <?php if (!empty($emp['aadhaar_back_url'])): ?>
+                        <a href="<?php echo sanitize($emp['aadhaar_back_url']); ?>" target="_blank">
+                            <img src="<?php echo sanitize($emp['aadhaar_back_url']); ?>" class="img-thumbnail" style="max-height: 120px;">
+                        </a>
+                        <?php else: ?>
+                        <div class="img-thumbnail d-flex align-items-center justify-content-center bg-light" style="height: 120px;">
+                            <span class="text-muted">Not Uploaded</span>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                    
+                    <!-- Bank Document -->
+                    <div class="col-md-3 mb-3 text-center">
+                        <label class="text-muted small d-block">Bank Passbook</label>
+                        <?php if (!empty($emp['bank_document_url'])): ?>
+                        <a href="<?php echo sanitize($emp['bank_document_url']); ?>" target="_blank">
+                            <img src="<?php echo sanitize($emp['bank_document_url']); ?>" class="img-thumbnail" style="max-height: 120px;">
+                        </a>
+                        <?php else: ?>
+                        <div class="img-thumbnail d-flex align-items-center justify-content-center bg-light" style="height: 120px;">
+                            <span class="text-muted">Not Uploaded</span>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <!-- Bank Details -->
         <div class="card mb-3">
-            <div class="card-header">
+            <div class="card-header bg-light">
                 <h6 class="mb-0"><i class="bi bi-bank me-2"></i>Bank Details</h6>
             </div>
             <div class="card-body">
@@ -324,7 +527,7 @@ $documentTypes = [
                             <?php else: ?>-<?php endif; ?>
                         </div>
                     </div>
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-6 mb-3">
                         <label class="text-muted small">Account Holder Name</label>
                         <div><?php echo sanitize($emp['account_holder_name'] ?? '-'); ?></div>
                     </div>
@@ -334,7 +537,7 @@ $documentTypes = [
         
         <!-- Employment Details -->
         <div class="card mb-3">
-            <div class="card-header">
+            <div class="card-header bg-light">
                 <h6 class="mb-0"><i class="bi bi-briefcase me-2"></i>Employment Details</h6>
             </div>
             <div class="card-body">
@@ -357,7 +560,7 @@ $documentTypes = [
                     </div>
                     <div class="col-md-4 mb-3">
                         <label class="text-muted small">Worker Category</label>
-                        <div><span class="badge bg-info-soft"><?php echo sanitize($emp['worker_category'] ?? '-'); ?></span></div>
+                        <div><span class="badge bg-info"><?php echo sanitize($emp['worker_category'] ?? '-'); ?></span></div>
                     </div>
                     <div class="col-md-4 mb-3">
                         <label class="text-muted small">Employment Type</label>
@@ -375,18 +578,30 @@ $documentTypes = [
                         <label class="text-muted small">Probation Period</label>
                         <div><?php echo !empty($emp['probation_period']) ? $emp['probation_period'] . ' months' : '-'; ?></div>
                     </div>
+                    <?php if (!empty($emp['date_of_leaving'])): ?>
+                    <div class="col-md-4 mb-3">
+                        <label class="text-muted small">Date of Leaving</label>
+                        <div class="text-danger"><?php echo formatDate($emp['date_of_leaving']); ?></div>
+                    </div>
+                    <?php endif; ?>
+                    <?php if (!empty($emp['confirmation_date'])): ?>
+                    <div class="col-md-4 mb-3">
+                        <label class="text-muted small">Confirmation Date</label>
+                        <div><?php echo formatDate($emp['confirmation_date']); ?></div>
+                    </div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
         
         <!-- Wage Details -->
         <div class="card mb-3">
-            <div class="card-header">
+            <div class="card-header bg-light">
                 <h6 class="mb-0"><i class="bi bi-currency-rupee me-2"></i>Wage Details</h6>
             </div>
             <div class="card-body">
                 <div class="table-responsive">
-                    <table class="table table-bordered">
+                    <table class="table table-bordered table-sm">
                         <thead class="table-light">
                             <tr>
                                 <th>Basic</th>
@@ -401,27 +616,21 @@ $documentTypes = [
                         </thead>
                         <tbody>
                             <tr>
-                                <td><?php echo formatCurrency($emp['basic_wage'] ?? 0); ?></td>
-                                <td><?php echo formatCurrency($emp['da'] ?? 0); ?></td>
-                                <td><?php echo formatCurrency($emp['hra'] ?? 0); ?></td>
-                                <td><?php echo formatCurrency($emp['conveyance'] ?? 0); ?></td>
-                                <td><?php echo formatCurrency($emp['medical_allowance'] ?? 0); ?></td>
-                                <td><?php echo formatCurrency($emp['special_allowance'] ?? 0); ?></td>
-                                <td><?php echo formatCurrency($emp['other_allowance'] ?? 0); ?></td>
-                                <td class="fw-bold"><?php echo formatCurrency($emp['gross_salary'] ?? 0); ?></td>
+                                <td><?php echo formatCurrency($salary['basic_wage'] ?? 0); ?></td>
+                                <td><?php echo formatCurrency($salary['da'] ?? 0); ?></td>
+                                <td><?php echo formatCurrency($salary['hra'] ?? 0); ?></td>
+                                <td><?php echo formatCurrency($salary['conveyance'] ?? 0); ?></td>
+                                <td><?php echo formatCurrency($salary['medical_allowance'] ?? 0); ?></td>
+                                <td><?php echo formatCurrency($salary['special_allowance'] ?? 0); ?></td>
+                                <td><?php echo formatCurrency($salary['other_allowance'] ?? 0); ?></td>
+                                <td class="fw-bold text-success"><?php echo formatCurrency($salary['gross_salary'] ?? 0); ?></td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
-            </div>
-        </div>
-        
-        <!-- Statutory Details -->
-        <div class="card mb-3">
-            <div class="card-header">
-                <h6 class="mb-0"><i class="bi bi-shield-check me-2"></i>Statutory Applicability</h6>
-            </div>
-            <div class="card-body">
+                
+                <!-- Statutory Applicability -->
+                <h6 class="mt-3 mb-2">Statutory Applicability</h6>
                 <div class="row">
                     <div class="col-md-12">
                         <table class="table table-sm table-bordered">
@@ -438,13 +647,13 @@ $documentTypes = [
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td><?php echo !empty($emp['pf_applicable']) ? '<span class="badge bg-success">Yes</span>' : '<span class="badge bg-secondary">No</span>'; ?></td>
-                                    <td><?php echo !empty($emp['esi_applicable']) ? '<span class="badge bg-success">Yes</span>' : '<span class="badge bg-secondary">No</span>'; ?></td>
-                                    <td><?php echo !empty($emp['pt_applicable']) ? '<span class="badge bg-success">Yes</span>' : '<span class="badge bg-secondary">No</span>'; ?></td>
-                                    <td><?php echo !empty($emp['lwf_applicable']) ? '<span class="badge bg-success">Yes</span>' : '<span class="badge bg-secondary">No</span>'; ?></td>
-                                    <td><?php echo !empty($emp['bonus_applicable']) ? '<span class="badge bg-success">Yes</span>' : '<span class="badge bg-secondary">No</span>'; ?></td>
-                                    <td><?php echo !empty($emp['gratuity_applicable']) ? '<span class="badge bg-success">Yes</span>' : '<span class="badge bg-secondary">No</span>'; ?></td>
-                                    <td><?php echo !empty($emp['overtime_applicable']) ? '<span class="badge bg-success">Yes</span>' : '<span class="badge bg-secondary">No</span>'; ?></td>
+                                    <td><?php echo !empty($salary['pf_applicable']) ? '<span class="badge bg-success">Yes</span>' : '<span class="badge bg-secondary">No</span>'; ?></td>
+                                    <td><?php echo !empty($salary['esi_applicable']) ? '<span class="badge bg-success">Yes</span>' : '<span class="badge bg-secondary">No</span>'; ?></td>
+                                    <td><?php echo !empty($salary['pt_applicable']) ? '<span class="badge bg-success">Yes</span>' : '<span class="badge bg-secondary">No</span>'; ?></td>
+                                    <td><?php echo !empty($salary['lwf_applicable']) ? '<span class="badge bg-success">Yes</span>' : '<span class="badge bg-secondary">No</span>'; ?></td>
+                                    <td><?php echo !empty($salary['bonus_applicable']) ? '<span class="badge bg-success">Yes</span>' : '<span class="badge bg-secondary">No</span>'; ?></td>
+                                    <td><?php echo !empty($salary['gratuity_applicable']) ? '<span class="badge bg-success">Yes</span>' : '<span class="badge bg-secondary">No</span>'; ?></td>
+                                    <td><?php echo !empty($salary['overtime_applicable']) ? '<span class="badge bg-success">Yes</span>' : '<span class="badge bg-secondary">No</span>'; ?></td>
                                 </tr>
                             </tbody>
                         </table>
@@ -455,13 +664,13 @@ $documentTypes = [
         
         <!-- Nominee & Emergency Contact -->
         <div class="card mb-3">
-            <div class="card-header">
+            <div class="card-header bg-light">
                 <h6 class="mb-0"><i class="bi bi-person-lines-fill me-2"></i>Nominee & Emergency Contact</h6>
             </div>
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-6 mb-3">
-                        <h6 class="text-primary">Emergency Contact</h6>
+                        <h6 class="text-primary"><i class="bi bi-telephone-fill me-1"></i>Emergency Contact</h6>
                         <table class="table table-sm table-borderless mb-0">
                             <tr>
                                 <td class="text-muted">Name:</td>
@@ -474,7 +683,7 @@ $documentTypes = [
                         </table>
                     </div>
                     <div class="col-md-6 mb-3">
-                        <h6 class="text-primary">Nominee</h6>
+                        <h6 class="text-primary"><i class="bi bi-person-check me-1"></i>Nominee</h6>
                         <table class="table table-sm table-borderless mb-0">
                             <tr>
                                 <td class="text-muted">Name:</td>
@@ -484,6 +693,14 @@ $documentTypes = [
                                 <td class="text-muted">Relation:</td>
                                 <td><?php echo sanitize($emp['nominee_relationship'] ?? '-'); ?></td>
                             </tr>
+                            <tr>
+                                <td class="text-muted">DOB:</td>
+                                <td><?php echo formatDate($emp['nominee_dob'] ?? null); ?></td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Contact:</td>
+                                <td><?php echo sanitize($emp['nominee_contact'] ?? '-'); ?></td>
+                            </tr>
                         </table>
                     </div>
                 </div>
@@ -492,8 +709,8 @@ $documentTypes = [
         
         <!-- Documents Section -->
         <div class="card mb-3">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h6 class="mb-0"><i class="bi bi-folder me-2"></i>Documents</h6>
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-folder me-2"></i>Uploaded Documents</h6>
                 <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#uploadDocumentModal">
                     <i class="bi bi-upload me-1"></i>Upload Document
                 </button>
@@ -504,25 +721,33 @@ $documentTypes = [
                         <thead>
                             <tr>
                                 <th>Document Type</th>
-                                <th>File</th>
+                                <th>File Name</th>
                                 <th>Uploaded On</th>
+                                <th>Verified</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php if (empty($documents)): ?>
                             <tr>
-                                <td colspan="4" class="text-center py-4 text-muted">No documents uploaded</td>
+                                <td colspan="5" class="text-center py-4 text-muted">No documents uploaded yet</td>
                             </tr>
                             <?php else: ?>
                             <?php foreach ($documents as $doc): ?>
                             <tr>
                                 <td><?php echo sanitize($doc['document_type']); ?></td>
-                                <td><?php echo sanitize($doc['document_name'] ?? $doc['file_path']); ?></td>
+                                <td><?php echo sanitize($doc['document_name'] ?? basename($doc['file_path'])); ?></td>
                                 <td><?php echo formatDateTime($doc['created_at']); ?></td>
                                 <td>
+                                    <?php if (!empty($doc['verified'])): ?>
+                                    <span class="badge bg-success">Verified</span>
+                                    <?php else: ?>
+                                    <span class="badge bg-warning">Pending</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
                                     <a href="<?php echo sanitize($doc['file_path']); ?>" class="btn btn-sm btn-outline-primary" target="_blank">
-                                        <i class="bi bi-eye"></i> View
+                                        <i class="bi bi-eye"></i>
                                     </a>
                                 </td>
                             </tr>
@@ -536,18 +761,93 @@ $documentTypes = [
     </div>
 </div>
 
+<!-- Approve Modal -->
+<div class="modal fade" id="approveModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <form method="POST">
+                <input type="hidden" name="action" value="approve">
+                <div class="modal-header">
+                    <h5 class="modal-title">Approve Employee</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to approve <strong><?php echo sanitize($emp['full_name']); ?></strong>?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">Approve</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Reject Modal -->
+<div class="modal fade" id="rejectModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST">
+                <input type="hidden" name="action" value="reject">
+                <div class="modal-header">
+                    <h5 class="modal-title">Reject Employee</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Reason for Rejection</label>
+                        <textarea class="form-control" name="reason" rows="3" required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Reject</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Mark as Left Modal -->
+<div class="modal fade" id="leftModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST">
+                <input type="hidden" name="action" value="mark_left">
+                <div class="modal-header">
+                    <h5 class="modal-title">Mark Employee as Left</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Date of Leaving</label>
+                        <input type="date" class="form-control" name="date_of_leaving" value="<?php echo date('Y-m-d'); ?>" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Reason</label>
+                        <textarea class="form-control" name="reason" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning">Mark as Left</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Upload Document Modal -->
 <div class="modal fade" id="uploadDocumentModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <form method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="upload_document" value="1">
                 <div class="modal-header">
                     <h5 class="modal-title">Upload Document</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <input type="hidden" name="upload_document" value="1">
-                    
                     <div class="mb-3">
                         <label class="form-label">Document Type</label>
                         <select class="form-select" name="document_type" required>
@@ -557,7 +857,6 @@ $documentTypes = [
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    
                     <div class="mb-3">
                         <label class="form-label">File</label>
                         <input type="file" class="form-control" name="document_file" required>
@@ -571,3 +870,17 @@ $documentTypes = [
         </div>
     </div>
 </div>
+
+<script>
+function approveEmployee() {
+    new bootstrap.Modal('#approveModal').show();
+}
+
+function rejectEmployee() {
+    new bootstrap.Modal('#rejectModal').show();
+}
+
+function markAsLeft() {
+    new bootstrap.Modal('#leftModal').show();
+}
+</script>
