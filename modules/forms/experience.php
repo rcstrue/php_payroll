@@ -28,6 +28,9 @@ if (!$emp) {
 $stmt = $db->query("SELECT * FROM companies LIMIT 1");
 $company = $stmt->fetch(PDO::FETCH_ASSOC);
 
+// Build full name
+$fullName = trim(($emp['salutation'] ?? '') . ' ' . $emp['full_name'] . ' ' . ($emp['middle_name'] ?? ''));
+
 // Calculate tenure
 $tenure = '';
 if ($emp['date_of_joining']) {
@@ -43,7 +46,7 @@ if ($emp['date_of_joining']) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Experience Letter - <?php echo sanitize($emp['full_name'] . ' ' . ); ?></title>
+    <title>Experience Letter - <?php echo sanitize($fullName); ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { padding: 40px; font-family: 'Times New Roman', serif; line-height: 1.8; font-size: 14px; }
@@ -77,7 +80,7 @@ if ($emp['date_of_joining']) {
         
         <!-- Ref and Date -->
         <div style="display: flex; justify-content: space-between; margin-bottom: 30px;">
-            <div><strong>Ref No:</strong> RCS/EXP/<?php echo date('Y'); ?>/<?php echo str_pad($emp['id'], 4, '0', STR_PAD_LEFT); ?></div>
+            <div><strong>Ref No:</strong> RCS/EXP/<?php echo date('Y'); ?>/<?php echo str_pad($emp['employee_code'], 4, '0', STR_PAD_LEFT); ?></div>
             <div><strong>Date:</strong> <?php echo date('d/m/Y'); ?></div>
         </div>
         
@@ -90,7 +93,7 @@ if ($emp['date_of_joining']) {
         <!-- Body -->
         <div class="letter-body">
             <p>
-                This is to certify that <strong><?php echo sanitize($emp['salutation'] . ' ' . $emp['full_name'] . ' ' . ($emp['middle_name'] ?? '') . ' ' . ); ?></strong>, 
+                This is to certify that <strong><?php echo sanitize($fullName); ?></strong>, 
                 S/o/D/o <strong><?php echo sanitize($emp['father_name'] ?? ''); ?></strong>, 
                 was employed with <?php echo sanitize($company['company_name'] ?? 'RCS TRUE FACILITIES PVT LTD'); ?> 
                 as <strong><?php echo sanitize($emp['designation'] ?? 'Worker'); ?></strong> 

@@ -28,6 +28,9 @@ if (!$emp) {
 $stmt = $db->query("SELECT * FROM companies LIMIT 1");
 $company = $stmt->fetch(PDO::FETCH_ASSOC);
 
+// Build full name
+$fullName = trim(($emp['salutation'] ?? '') . ' ' . $emp['full_name'] . ' ' . ($emp['middle_name'] ?? ''));
+
 // Calculate tenure
 $tenure = '';
 $tenureYears = 0;
@@ -45,7 +48,7 @@ if ($emp['date_of_joining']) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Service Certificate - <?php echo sanitize($emp['full_name'] . ' ' . ); ?></title>
+    <title>Service Certificate - <?php echo sanitize($fullName); ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { padding: 40px; font-family: 'Times New Roman', serif; line-height: 1.8; font-size: 14px; }
@@ -88,7 +91,7 @@ if ($emp['date_of_joining']) {
         
         <!-- Ref and Date -->
         <div style="display: flex; justify-content: space-between; margin-bottom: 30px;">
-            <div><strong>Certificate No:</strong> RCS/SVC/<?php echo date('Y'); ?>/<?php echo str_pad($emp['id'], 4, '0', STR_PAD_LEFT); ?></div>
+            <div><strong>Certificate No:</strong> RCS/SVC/<?php echo date('Y'); ?>/<?php echo str_pad($emp['employee_code'], 4, '0', STR_PAD_LEFT); ?></div>
             <div><strong>Date:</strong> <?php echo date('d/m/Y'); ?></div>
         </div>
         
@@ -99,7 +102,7 @@ if ($emp['date_of_joining']) {
             <table class="details-table">
                 <tr>
                     <td>Name of Employee</td>
-                    <td><?php echo sanitize($emp['salutation'] . ' ' . $emp['full_name'] . ' ' . ($emp['middle_name'] ?? '') . ' ' . ); ?></td>
+                    <td><?php echo sanitize($fullName); ?></td>
                 </tr>
                 <tr>
                     <td>Father's/Husband's Name</td>
@@ -163,19 +166,11 @@ if ($emp['date_of_joining']) {
                 </tr>
                 <tr>
                     <td>ESIC IP Number</td>
-                    <td><?php echo sanitize($emp['esic_ip_number'] ?? 'N/A'); ?></td>
-                </tr>
-                <tr>
-                    <td>PF Applicable</td>
-                    <td><?php echo $emp['pf_applicable'] ? 'Yes (' . sanitize($emp['pf_number'] ?? '') . ')' : 'No'; ?></td>
-                </tr>
-                <tr>
-                    <td>ESI Applicable</td>
-                    <td><?php echo $emp['esi_applicable'] ? 'Yes' : 'No'; ?></td>
+                    <td><?php echo sanitize($emp['esic_number'] ?? 'N/A'); ?></td>
                 </tr>
                 <tr>
                     <td>Remarks</td>
-                    <td><?php echo sanitize($emp['leaving_reason'] ?? 'Good conduct during service period'); ?></td>
+                    <td>Good conduct during service period</td>
                 </tr>
             </table>
             

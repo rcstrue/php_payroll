@@ -27,6 +27,9 @@ if (!$emp) {
 // Get company details
 $stmt = $db->query("SELECT * FROM companies LIMIT 1");
 $company = $stmt->fetch(PDO::FETCH_ASSOC);
+
+// Build full name
+$fullName = trim(($emp['salutation'] ?? '') . ' ' . $emp['full_name'] . ' ' . ($emp['middle_name'] ?? ''));
 ?>
 
 <!DOCTYPE html>
@@ -34,7 +37,7 @@ $company = $stmt->fetch(PDO::FETCH_ASSOC);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PF Nomination Form - <?php echo sanitize($emp['full_name'] . ' ' . ); ?></title>
+    <title>PF Nomination Form - <?php echo sanitize($fullName); ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { padding: 20px; font-family: 'Times New Roman', serif; font-size: 14px; }
@@ -87,7 +90,7 @@ $company = $stmt->fetch(PDO::FETCH_ASSOC);
         <table class="form-table">
             <tr>
                 <th>Name (in Block Letters)</th>
-                <td><?php echo sanitize($emp['salutation'] . ' ' . $emp['full_name'] . ' ' . ($emp['middle_name'] ?? '') . ' ' . ); ?></td>
+                <td><?php echo sanitize($fullName); ?></td>
             </tr>
             <tr>
                 <th>Father's/Husband's Name</th>
@@ -144,11 +147,11 @@ $company = $stmt->fetch(PDO::FETCH_ASSOC);
             <tbody>
                 <tr>
                     <td>1</td>
-                    <td><?php echo sanitize($emp['pf_nominee_name'] ?? ''); ?></td>
-                    <td><?php echo sanitize($emp['pf_nominee_relation'] ?? ''); ?></td>
-                    <td><?php echo formatDate($emp['pf_nominee_dob']); ?></td>
+                    <td><?php echo sanitize($emp['nominee_name'] ?? ''); ?></td>
+                    <td><?php echo sanitize($emp['nominee_relationship'] ?? ''); ?></td>
+                    <td><?php echo formatDate($emp['nominee_dob'] ?? null); ?></td>
                     <td><?php echo sanitize($emp['address'] ?? ''); ?></td>
-                    <td><?php echo $emp['pf_nominee_share'] ?? 100; ?>%</td>
+                    <td>100%</td>
                 </tr>
             </tbody>
         </table>
@@ -167,7 +170,7 @@ $company = $stmt->fetch(PDO::FETCH_ASSOC);
                 <br>
                 <p><strong>Signature/Thumb Impression of Member:</strong></p>
                 <div class="signature-box"></div>
-                <p>Name: <?php echo sanitize($emp['full_name'] . ' ' . ); ?></p>
+                <p>Name: <?php echo sanitize($fullName); ?></p>
             </div>
             <div class="col-6">
                 <p><strong>Employer's Certification:</strong></p>

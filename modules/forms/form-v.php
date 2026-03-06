@@ -7,7 +7,7 @@
 $pageTitle = 'Form V - Register of Workmen';
 
 // Get units
-$stmt = $db->query("SELECT u.id, u.name as unit_name, c.name as client_name FROM units u LEFT JOIN clients c ON u.client_id = c.id WHERE u.is_active = 1 ORDER BY c.name as client_name, u.name as unit_name");
+$stmt = $db->query("SELECT u.id, u.name as unit_name, c.name as client_name FROM units u LEFT JOIN clients c ON u.client_id = c.id WHERE u.is_active = 1 ORDER BY c.name, u.name");
 $units = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $unitId = $_GET['unit_id'] ?? null;
@@ -20,6 +20,14 @@ if ($unitId) {
     $stmt = $db->prepare("SELECT u.*, c.name as client_name, c.address as client_address FROM units u LEFT JOIN clients c ON u.client_id = c.id WHERE u.id = ?");
     $stmt->execute([$unitId]);
     $unitDetails = $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+// Helper function for age calculation
+function calculateAge($dob) {
+    if (empty($dob)) return '-';
+    $birth = new DateTime($dob);
+    $today = new DateTime();
+    return $birth->diff($today)->y;
 }
 ?>
 
@@ -106,10 +114,11 @@ if ($unitId) {
                         <?php 
                         $sr = 1;
                         foreach ($formData as $emp): 
+                            $empName = trim($emp['full_name'] . ' ' . ($emp['middle_name'] ?? ''));
                         ?>
                         <tr>
                             <td class="text-center"><?php echo $sr++; ?></td>
-                            <td><?php echo sanitize($emp['full_name'] . ' ' . ); ?></td>
+                            <td><?php echo sanitize($empName); ?></td>
                             <td><?php echo sanitize($emp['father_name'] ?? '-'); ?></td>
                             <td class="text-center"><?php echo substr($emp['gender'], 0, 1); ?></td>
                             <td class="text-center"><?php echo formatDate($emp['date_of_birth']); ?></td>

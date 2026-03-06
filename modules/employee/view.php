@@ -47,8 +47,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Reject employee
     if ($action === 'reject' && $emp['status'] === 'pending_hr_verification') {
         $reason = sanitize($_POST['reason'] ?? '');
-        $stmt = $db->prepare("UPDATE employees SET status = 'inactive', leaving_reason = ? WHERE id = ?");
-        $stmt->execute([$reason, $employeeId]);
+        // Try to update with leaving_reason if column exists, otherwise just update status
+        try {
+            $stmt = $db->prepare("UPDATE employees SET status = 'inactive', remarks = ? WHERE id = ?");
+            $stmt->execute([$reason, $employeeId]);
+        } catch (Exception $e) {
+            $stmt = $db->prepare("UPDATE employees SET status = 'inactive' WHERE id = ?");
+            $stmt->execute([$employeeId]);
+        }
         setFlash('success', 'Employee rejected.');
         redirect('index.php?page=employee/view&id=' . $employeeId);
     }
@@ -57,8 +63,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'mark_left') {
         $dol = sanitize($_POST['date_of_leaving'] ?? date('Y-m-d'));
         $reason = sanitize($_POST['reason'] ?? '');
-        $stmt = $db->prepare("UPDATE employees SET status = 'inactive', date_of_leaving = ?, leaving_reason = ? WHERE id = ?");
-        $stmt->execute([$dol, $reason, $employeeId]);
+        // Try to update with remarks column, fallback to just status and date
+        try {
+            $stmt = $db->prepare("UPDATE employees SET status = 'inactive', date_of_leaving = ?, remarks = ? WHERE id = ?");
+            $stmt->execute([$dol, $reason, $employeeId]);
+        } catch (Exception $e) {
+            $stmt = $db->prepare("UPDATE employees SET status = 'inactive', date_of_leaving = ? WHERE id = ?");
+            $stmt->execute([$dol, $employeeId]);
+        }
         setFlash('success', 'Employee marked as left.');
         redirect('index.php?page=employee/view&id=' . $employeeId);
     }

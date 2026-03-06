@@ -24,14 +24,12 @@ if (!$emp) {
     redirect('index.php?page=employee/list');
 }
 
-// Check if employee has left
-if ($emp['status'] !== 'Left' && $emp['status'] !== 'Terminated') {
-    // Show warning but still allow viewing
-}
-
 // Get company details
 $stmt = $db->query("SELECT * FROM companies LIMIT 1");
 $company = $stmt->fetch(PDO::FETCH_ASSOC);
+
+// Build full name
+$fullName = trim(($emp['salutation'] ?? '') . ' ' . $emp['full_name'] . ' ' . ($emp['middle_name'] ?? ''));
 
 // Calculate tenure
 $tenure = '';
@@ -48,7 +46,7 @@ if ($emp['date_of_joining'] && $emp['date_of_leaving']) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Relieving Letter - <?php echo sanitize($emp['full_name'] . ' ' . ); ?></title>
+    <title>Relieving Letter - <?php echo sanitize($fullName); ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { padding: 40px; font-family: 'Times New Roman', serif; line-height: 1.8; font-size: 14px; }
@@ -68,7 +66,7 @@ if ($emp['date_of_joining'] && $emp['date_of_leaving']) {
         <button onclick="window.close()" class="btn btn-secondary">Close</button>
     </div>
     
-    <?php if ($emp['status'] !== 'Left' && $emp['status'] !== 'Terminated'): ?>
+    <?php if ($emp['status'] !== 'inactive' && $emp['status'] !== 'terminated'): ?>
     <div class="no-print alert alert-warning">
         <strong>Warning:</strong> This employee is currently marked as "<?php echo sanitize($emp['status']); ?>". 
         Relieving letter is typically issued after employee has left the organization.
@@ -89,7 +87,7 @@ if ($emp['date_of_joining'] && $emp['date_of_leaving']) {
         
         <!-- Ref and Date -->
         <div style="display: flex; justify-content: space-between; margin-bottom: 30px;">
-            <div><strong>Ref No:</strong> RCS/REL/<?php echo date('Y'); ?>/<?php echo str_pad($emp['id'], 4, '0', STR_PAD_LEFT); ?></div>
+            <div><strong>Ref No:</strong> RCS/REL/<?php echo date('Y'); ?>/<?php echo str_pad($emp['employee_code'], 4, '0', STR_PAD_LEFT); ?></div>
             <div><strong>Date:</strong> <?php echo date('d/m/Y'); ?></div>
         </div>
         
@@ -98,7 +96,7 @@ if ($emp['date_of_joining'] && $emp['date_of_leaving']) {
         
         <!-- To -->
         <p>
-            <strong><?php echo sanitize($emp['salutation'] . ' ' . $emp['full_name'] . ' ' . ($emp['middle_name'] ?? '') . ' ' . ); ?></strong><br>
+            <strong><?php echo sanitize($fullName); ?></strong><br>
             Employee Code: <?php echo sanitize($emp['employee_code']); ?><br>
             <?php if ($emp['address']): ?>
             <?php echo sanitize($emp['address']); ?><br>

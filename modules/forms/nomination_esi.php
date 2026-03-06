@@ -32,6 +32,9 @@ $company = $stmt->fetch(PDO::FETCH_ASSOC);
 $stmt = $db->prepare("SELECT * FROM employee_family WHERE employee_id = ?");
 $stmt->execute([$employeeId]);
 $familyMembers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Build full name
+$fullName = trim(($emp['salutation'] ?? '') . ' ' . $emp['full_name'] . ' ' . ($emp['middle_name'] ?? ''));
 ?>
 
 <!DOCTYPE html>
@@ -39,7 +42,7 @@ $familyMembers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESI Nomination Form - <?php echo sanitize($emp['full_name'] . ' ' . ); ?></title>
+    <title>ESI Nomination Form - <?php echo sanitize($fullName); ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { padding: 20px; font-family: 'Times New Roman', serif; font-size: 14px; }
@@ -73,11 +76,11 @@ $familyMembers = $stmt->fetchAll(PDO::FETCH_ASSOC);
         <table class="form-table">
             <tr>
                 <th>Insurance Number (IP Number)</th>
-                <td><?php echo sanitize($emp['esic_ip_number'] ?? ''); ?></td>
+                <td><?php echo sanitize($emp['esic_number'] ?? ''); ?></td>
             </tr>
             <tr>
                 <th>Name (in Block Letters)</th>
-                <td><?php echo sanitize($emp['salutation'] . ' ' . $emp['full_name'] . ' ' . ($emp['middle_name'] ?? '') . ' ' . ); ?></td>
+                <td><?php echo sanitize($fullName); ?></td>
             </tr>
             <tr>
                 <th>Father's/Husband's Name</th>
@@ -107,31 +110,12 @@ $familyMembers = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 ?></td>
             </tr>
             <tr>
-                <th>Permanent Address</th>
-                <td><?php 
-                    if ($emp['same_as_present']) {
-                        echo 'Same as above';
-                    } else {
-                        $permAddr = [];
-                        if ($emp['permanent_address']) $permAddr[] = sanitize($emp['permanent_address']);
-                        if ($emp['permanent_city']) $permAddr[] = sanitize($emp['permanent_city']);
-                        if ($emp['permanent_state']) $permAddr[] = sanitize($emp['permanent_state']);
-                        if ($emp['permanent_pincode']) $permAddr[] = sanitize($emp['permanent_pincode']);
-                        echo implode(', ', $permAddr);
-                    }
-                ?></td>
-            </tr>
-            <tr>
                 <th>Occupation/Designation</th>
                 <td><?php echo sanitize($emp['designation'] ?? ''); ?></td>
             </tr>
             <tr>
                 <th>Date of Entry into Employment</th>
                 <td><?php echo formatDate($emp['date_of_joining']); ?></td>
-            </tr>
-            <tr>
-                <th>ESI Dispensary</th>
-                <td><?php echo sanitize($emp['esi_dispensary'] ?? ''); ?></td>
             </tr>
         </table>
         
@@ -161,8 +145,8 @@ $familyMembers = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <?php else: ?>
                     <tr>
                         <td>1</td>
-                        <td><?php echo sanitize($emp['esi_nominee_name'] ?? ''); ?></td>
-                        <td><?php echo sanitize($emp['esi_nominee_relation'] ?? ''); ?></td>
+                        <td><?php echo sanitize($emp['nominee_name'] ?? ''); ?></td>
+                        <td><?php echo sanitize($emp['nominee_relationship'] ?? ''); ?></td>
                         <td></td>
                         <td>Yes</td>
                     </tr>
@@ -185,11 +169,11 @@ $familyMembers = $stmt->fetchAll(PDO::FETCH_ASSOC);
         <table class="form-table">
             <tr>
                 <th>Name of Nominee</th>
-                <td><?php echo sanitize($emp['esi_nominee_name'] ?? ''); ?></td>
+                <td><?php echo sanitize($emp['nominee_name'] ?? ''); ?></td>
             </tr>
             <tr>
                 <th>Relationship</th>
-                <td><?php echo sanitize($emp['esi_nominee_relation'] ?? ''); ?></td>
+                <td><?php echo sanitize($emp['nominee_relationship'] ?? ''); ?></td>
             </tr>
             <tr>
                 <th>Address</th>
@@ -211,7 +195,7 @@ $familyMembers = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <br>
                 <p><strong>Signature/Thumb Impression of Insured Person:</strong></p>
                 <div class="signature-box"></div>
-                <p>Name: <?php echo sanitize($emp['full_name'] . ' ' . ); ?></p>
+                <p>Name: <?php echo sanitize($fullName); ?></p>
             </div>
             <div class="col-6">
                 <p><strong>Certified by Employer:</strong></p>

@@ -27,6 +27,9 @@ if (!$emp) {
 // Get company details
 $stmt = $db->query("SELECT * FROM companies LIMIT 1");
 $company = $stmt->fetch(PDO::FETCH_ASSOC);
+
+// Build full name
+$fullName = trim(($emp['salutation'] ?? '') . ' ' . $emp['full_name'] . ' ' . ($emp['middle_name'] ?? ''));
 ?>
 
 <!DOCTYPE html>
@@ -34,7 +37,7 @@ $company = $stmt->fetch(PDO::FETCH_ASSOC);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gratuity Nomination Form - <?php echo sanitize($emp['full_name'] . ' ' . ); ?></title>
+    <title>Gratuity Nomination Form - <?php echo sanitize($fullName); ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { padding: 20px; font-family: 'Times New Roman', serif; font-size: 14px; }
@@ -65,7 +68,7 @@ $company = $stmt->fetch(PDO::FETCH_ASSOC);
         </div>
         
         <!-- Nomination Details -->
-        <p>I, <strong><?php echo sanitize($emp['salutation'] . ' ' . $emp['full_name'] . ' ' . ($emp['middle_name'] ?? '') . ' ' . ); ?></strong>, 
+        <p>I, <strong><?php echo sanitize($fullName); ?></strong>, 
         hereby nominate the person(s) mentioned below under Section 6 of the Payment of Gratuity Act, 1972, to receive the gratuity payable under the Act in the event of my death:</p>
         
         <!-- Employee Details -->
@@ -73,7 +76,7 @@ $company = $stmt->fetch(PDO::FETCH_ASSOC);
         <table class="form-table">
             <tr>
                 <th>Name of Employee</th>
-                <td><?php echo sanitize($emp['salutation'] . ' ' . $emp['full_name'] . ' ' . ($emp['middle_name'] ?? '') . ' ' . ); ?></td>
+                <td><?php echo sanitize($fullName); ?></td>
             </tr>
             <tr>
                 <th>Employee Code</th>
@@ -128,15 +131,15 @@ $company = $stmt->fetch(PDO::FETCH_ASSOC);
             <tbody>
                 <tr>
                     <td>1</td>
-                    <td><?php echo sanitize($emp['gratuity_nominee_name'] ?? ''); ?></td>
-                    <td><?php echo sanitize($emp['gratuity_nominee_relation'] ?? ''); ?></td>
+                    <td><?php echo sanitize($emp['nominee_name'] ?? ''); ?></td>
+                    <td><?php echo sanitize($emp['nominee_relationship'] ?? ''); ?></td>
                     <td><?php 
-                        if ($emp['gratuity_nominee_dob']) {
-                            $nomDob = new DateTime($emp['gratuity_nominee_dob']);
+                        if (!empty($emp['nominee_dob'])) {
+                            $nomDob = new DateTime($emp['nominee_dob']);
                             echo $nomDob->diff(new DateTime())->y;
                         }
                     ?></td>
-                    <td><?php echo sanitize($emp['gratuity_nominee_address'] ?? $emp['address'] ?? ''); ?></td>
+                    <td><?php echo sanitize($emp['address'] ?? ''); ?></td>
                     <td>100%</td>
                 </tr>
             </tbody>
@@ -179,7 +182,7 @@ $company = $stmt->fetch(PDO::FETCH_ASSOC);
                 <br>
                 <p><strong>Signature of Employee:</strong></p>
                 <div class="signature-box"></div>
-                <p>Name: <?php echo sanitize($emp['full_name'] . ' ' . ); ?></p>
+                <p>Name: <?php echo sanitize($fullName); ?></p>
             </div>
             <div class="col-6">
                 <p><strong>Employer's Acknowledgement:</strong></p>
