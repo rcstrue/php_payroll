@@ -53,6 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'nominee_contact' => sanitize($_POST['nominee_contact'] ?? ''),
         'emergency_contact_name' => sanitize($_POST['emergency_contact_name'] ?? ''),
         'emergency_contact_relation' => sanitize($_POST['emergency_contact_relation'] ?? ''),
+        'emergency_contact_number' => sanitize($_POST['emergency_contact_number'] ?? ''),
         'status' => 'pending_hr_verification',
         // Salary structure fields
         'basic_wage' => floatval($_POST['basic_wage'] ?? 0),
@@ -462,6 +463,11 @@ $designations = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                    value="<?php echo sanitize($employeeData['emergency_contact_relation'] ?? ''); ?>">
                         </div>
                         <div class="col-md-3">
+                            <label class="form-label">Emergency Contact Number</label>
+                            <input type="tel" class="form-control" name="emergency_contact_number" maxlength="10"
+                                   value="<?php echo sanitize($employeeData['emergency_contact_number'] ?? ''); ?>">
+                        </div>
+                        <div class="col-md-3">
                             <label class="form-label">Nominee Name</label>
                             <input type="text" class="form-control" name="nominee_name"
                                    value="<?php echo sanitize($employeeData['nominee_name'] ?? ''); ?>">
@@ -470,6 +476,16 @@ $designations = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             <label class="form-label">Nominee Relation</label>
                             <input type="text" class="form-control" name="nominee_relationship"
                                    value="<?php echo sanitize($employeeData['nominee_relationship'] ?? ''); ?>">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Nominee DOB</label>
+                            <input type="date" class="form-control" name="nominee_dob"
+                                   value="<?php echo $employeeData['nominee_dob'] ?? ''; ?>">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Nominee Contact</label>
+                            <input type="tel" class="form-control" name="nominee_contact" maxlength="10"
+                                   value="<?php echo sanitize($employeeData['nominee_contact'] ?? ''); ?>">
                         </div>
                     </div>
                 </div>
