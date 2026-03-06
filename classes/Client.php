@@ -1,7 +1,10 @@
 <?php
 /**
  * RCS HRMS Pro - Client Management Class
- * Note: employees table uses client_name (VARCHAR) not client_id (FK)
+ * 
+ * Database schema:
+ * - clients table has 'name' field (not 'client_name')
+ * - employees table has 'client_name' VARCHAR field
  */
 
 class Client {
@@ -15,14 +18,14 @@ class Client {
     public function getAll($activeOnly = true) {
         $sql = "SELECT c.*, 
                 (SELECT COUNT(*) FROM units WHERE client_id = c.id) as unit_count,
-                (SELECT COUNT(*) FROM employees WHERE client_name = c.client_name AND status = 'Active') as employee_count
+                (SELECT COUNT(*) FROM employees WHERE client_name = c.name AND status = 'approved') as employee_count
                 FROM clients c";
         
         if ($activeOnly) {
             $sql .= " WHERE c.is_active = 1";
         }
         
-        $sql .= " ORDER BY c.client_name ASC";
+        $sql .= " ORDER BY c.name ASC";
         
         return $this->db->fetchAll($sql);
     }
@@ -38,7 +41,7 @@ class Client {
     // Create new client
     public function create($data) {
         $exists = $this->db->fetch(
-            "SELECT id FROM clients WHERE client_name = :name",
+            "SELECT id FROM clients WHERE name = :name",
             ['name' => $data['client_name']]
         );
         
@@ -51,7 +54,7 @@ class Client {
         
         $id = $this->db->insert('clients', [
             'client_code' => $clientCode,
-            'client_name' => $data['client_name'],
+            'name' => $data['client_name'],
             'address' => $data['address'] ?? null,
             'city' => $data['city'] ?? null,
             'state' => $data['state'] ?? null,
@@ -69,7 +72,7 @@ class Client {
     // Update client
     public function update($id, $data) {
         $this->db->update('clients', [
-            'client_name' => $data['client_name'],
+            'name' => $data['client_name'],
             'address' => $data['address'] ?? null,
             'city' => $data['city'] ?? null,
             'state' => $data['state'] ?? null,
@@ -89,10 +92,10 @@ class Client {
         // Get client name first
         $client = $this->getById($id);
         if ($client) {
-            // Check if client has employees using client_name
+            // Check if client has employees using client_name matching name
             $employees = $this->db->fetch(
                 "SELECT COUNT(*) as count FROM employees WHERE client_name = :name",
-                ['name' => $client['client_name']]
+                ['name' => $client['name']]
             );
             
             if ($employees['count'] > 0) {
@@ -107,7 +110,7 @@ class Client {
     // Get client list for dropdowns
     public function getList() {
         return $this->db->fetchAll(
-            "SELECT id, client_name, client_code FROM clients WHERE is_active = 1 ORDER BY client_name"
+            "SELECT id, name, client_code FROM clients WHERE is_active = 1 ORDER BY name"
         );
     }
     

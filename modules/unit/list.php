@@ -1,6 +1,9 @@
 <?php
 /**
  * RCS HRMS Pro - Unit List
+ * 
+ * Database: units table has 'name' field (not 'unit_name')
+ * employees table has 'unit_name' VARCHAR field
  */
 
 $pageTitle = 'Units';
@@ -78,13 +81,16 @@ $units = $unit->getAll($clientFilter ?: null, false);
                             <option value="">All Clients</option>
                             <?php foreach ($clients as $c): ?>
                             <option value="<?php echo $c['id']; ?>" <?php echo $clientFilter == $c['id'] ? 'selected' : ''; ?>>
-                                <?php echo sanitize($c['client_name']); ?>
+                                <?php echo sanitize($c['name']); ?>
                             </option>
                             <?php endforeach; ?>
                         </select>
                     </div>
                     <div class="col-md-2">
                         <button type="submit" class="btn btn-sm btn-primary">Filter</button>
+                        <?php if ($clientFilter): ?>
+                        <a href="index.php?page=unit/list" class="btn btn-sm btn-secondary">Clear</a>
+                        <?php endif; ?>
                     </div>
                 </form>
             </div>
@@ -94,8 +100,8 @@ $units = $unit->getAll($clientFilter ?: null, false);
                         <thead>
                             <tr>
                                 <th>Client</th>
-                                <th>Unit Name</th>
                                 <th>Unit Code</th>
+                                <th>Unit Name</th>
                                 <th>Location</th>
                                 <th>Contact Person</th>
                                 <th class="text-center">Employees</th>
@@ -104,33 +110,41 @@ $units = $unit->getAll($clientFilter ?: null, false);
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($units as $u): ?>
-                            <tr>
-                                <td><?php echo sanitize($u['client_name'] ?? '-'); ?></td>
-                                <td><strong><?php echo sanitize($u['unit_name']); ?></strong></td>
-                                <td><?php echo sanitize($u['unit_code'] ?? '-'); ?></td>
-                                <td><?php echo sanitize($u['state'] ?? $u['city'] ?? '-'); ?></td>
-                                <td><?php echo sanitize($u['contact_person'] ?? '-'); ?></td>
-                                <td class="text-center">
-                                    <span class="badge bg-success"><?php echo $u['employee_count'] ?? 0; ?></span>
-                                </td>
-                                <td>
-                                    <span class="badge bg-<?php echo $u['is_active'] ? 'success' : 'danger'; ?>">
-                                        <?php echo $u['is_active'] ? 'Active' : 'Inactive'; ?>
-                                    </span>
-                                </td>
-                                <td>
-                                    <button type="button" class="btn btn-sm btn-outline-primary"
-                                            onclick='editUnit(<?php echo htmlspecialchars(json_encode($u)); ?>)'>
-                                        <i class="bi bi-pencil"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-outline-danger"
-                                            onclick="deleteUnit(<?php echo $u['id']; ?>)">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                </td>
-                            </tr>
-                            <?php endforeach; ?>
+                            <?php if (!empty($units)): ?>
+                                <?php foreach ($units as $u): ?>
+                                <tr>
+                                    <td><?php echo sanitize($u['client_name'] ?? '-'); ?></td>
+                                    <td><span class="badge bg-secondary"><?php echo sanitize($u['unit_code'] ?? '-'); ?></span></td>
+                                    <td><strong><?php echo sanitize($u['name']); ?></strong></td>
+                                    <td><?php echo sanitize($u['state'] ?? $u['city'] ?? '-'); ?></td>
+                                    <td><?php echo sanitize($u['contact_person'] ?? '-'); ?></td>
+                                    <td class="text-center">
+                                        <a href="index.php?page=employee/list&unit=<?php echo urlencode($u['name']); ?>">
+                                            <span class="badge bg-success"><?php echo $u['employee_count'] ?? 0; ?></span>
+                                        </a>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-<?php echo $u['is_active'] ? 'success' : 'danger'; ?>">
+                                            <?php echo $u['is_active'] ? 'Active' : 'Inactive'; ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <button type="button" class="btn btn-sm btn-outline-primary"
+                                                onclick='editUnit(<?php echo htmlspecialchars(json_encode($u)); ?>)'>
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-danger"
+                                                onclick="deleteUnit(<?php echo $u['id']; ?>)">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted py-4">No units found. Click "Add Unit" to create one.</td>
+                                </tr>
+                            <?php endif; ?>
                         </tbody>
                     </table>
                 </div>
@@ -155,7 +169,7 @@ $units = $unit->getAll($clientFilter ?: null, false);
                         <select class="form-select" name="client_id" id="add_client_id" required>
                             <option value="">Select Client</option>
                             <?php foreach ($clients as $c): ?>
-                            <option value="<?php echo $c['id']; ?>"><?php echo sanitize($c['client_name']); ?></option>
+                            <option value="<?php echo $c['id']; ?>"><?php echo sanitize($c['name']); ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -170,7 +184,7 @@ $units = $unit->getAll($clientFilter ?: null, false);
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Location</label>
+                        <label class="form-label">Location/State</label>
                         <input type="text" class="form-control" name="location">
                     </div>
                     <div class="mb-3">
@@ -217,7 +231,7 @@ $units = $unit->getAll($clientFilter ?: null, false);
                         <label class="form-label required">Client</label>
                         <select class="form-select" name="client_id" id="edit_client_id" required>
                             <?php foreach ($clients as $c): ?>
-                            <option value="<?php echo $c['id']; ?>"><?php echo sanitize($c['client_name']); ?></option>
+                            <option value="<?php echo $c['id']; ?>"><?php echo sanitize($c['name']); ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -232,7 +246,7 @@ $units = $unit->getAll($clientFilter ?: null, false);
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Location</label>
+                        <label class="form-label">Location/State</label>
                         <input type="text" class="form-control" name="location" id="edit_location">
                     </div>
                     <div class="mb-3">
@@ -273,14 +287,15 @@ $units = $unit->getAll($clientFilter ?: null, false);
 $(document).ready(function() {
     $('#unitsTable').DataTable({
         responsive: true,
-        pageLength: 25
+        pageLength: 25,
+        order: [[0, 'asc'], [2, 'asc']]
     });
 });
 
 function editUnit(u) {
     $('#edit_unit_id').val(u.id);
     $('#edit_client_id').val(u.client_id);
-    $('#edit_unit_name').val(u.unit_name);
+    $('#edit_unit_name').val(u.name);
     $('#edit_unit_code').val(u.unit_code || '');
     $('#edit_location').val(u.state || '');
     $('#edit_address').val(u.address || '');
