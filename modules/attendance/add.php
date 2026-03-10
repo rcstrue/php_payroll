@@ -6,6 +6,81 @@
 
 $pageTitle = 'Add Attendance';
 
+// Handle POST - Save Attendance
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_attendance'])) {
+    $unitId = (int)$_POST['unit_id'];
+    $month = (int)$_POST['month'];
+    $year = (int)$_POST['year'];
+    $employeeCodes = $_POST['employee_code'] ?? [];
+    
+    $savedCount = 0;
+    $errors = [];
+    
+    try {
+        // Ensure table exists with correct structure (INT employee_id to match employee_code)
+        $db->exec("CREATE TABLE IF NOT EXISTS `attendance_summary` (
+            `id` int(11) NOT NULL AUTO_INCREMENT,
+            `employee_id` int(11) NOT NULL,
+            `unit_id` int(11) DEFAULT NULL,
+            `month` int(2) NOT NULL,
+            `year` int(4) NOT NULL,
+            `total_present` decimal(5,2) DEFAULT 0.00,
+            `total_extra` decimal(5,2) DEFAULT 0.00,
+            `overtime_hours` decimal(6,2) DEFAULT 0.00,
+            `total_wo` int(3) DEFAULT 0,
+            `source` enum('Manual','Excel Upload') DEFAULT 'Manual',
+            `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+            `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_emp_month_year` (`employee_id`, `month`, `year`),
+            KEY `idx_unit_month_year` (`unit_id`, `month`, `year`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    } catch (Exception $e) {
+        $errors[] = "Table creation failed: " . $e->getMessage();
+    }
+    
+    foreach ($employeeCodes as $empCode) {
+        $empCode = (int)$empCode;
+        $totalPresent = isset($_POST['total_present'][$empCode]) ? floatval($_POST['total_present'][$empCode]) : 0;
+        $totalExtra = isset($_POST['total_extra'][$empCode]) ? floatval($_POST['total_extra'][$empCode]) : 0;
+        $overtimeHours = isset($_POST['overtime_hours'][$empCode]) ? floatval($_POST['overtime_hours'][$empCode]) : 0;
+        $totalWo = isset($_POST['total_wo'][$empCode]) ? intval($_POST['total_wo'][$empCode]) : 0;
+        
+        try {
+            // Use INSERT ... ON DUPLICATE KEY UPDATE for upsert
+            $stmt = $db->prepare("
+                INSERT INTO attendance_summary 
+                (employee_id, unit_id, month, year, total_present, total_extra, overtime_hours, total_wo, source)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Manual')
+                ON DUPLICATE KEY UPDATE 
+                    total_present = VALUES(total_present),
+                    total_extra = VALUES(total_extra),
+                    overtime_hours = VALUES(overtime_hours),
+                    total_wo = VALUES(total_wo),
+                    source = 'Manual',
+                    updated_at = CURRENT_TIMESTAMP
+            ");
+            $stmt->execute([$empCode, $unitId, $month, $year, $totalPresent, $totalExtra, $overtimeHours, $totalWo]);
+            $savedCount++;
+        } catch (Exception $e) {
+            $errors[] = "Failed to save attendance for employee $empCode: " . $e->getMessage();
+        }
+    }
+    
+    if ($savedCount > 0 && empty($errors)) {
+        setFlash('success', "Attendance saved successfully for $savedCount employees.");
+    } elseif ($savedCount > 0) {
+        setFlash('warning', "Attendance saved for $savedCount employees. Some errors occurred.");
+    } else {
+        setFlash('error', "Failed to save attendance. " . implode(', ', $errors));
+    }
+    
+    // Redirect to avoid form resubmission
+    header("Location: index.php?page=attendance/add&client_id=" . ($_GET['client_id'] ?? '') . 
+           "&unit_id=$unitId&month=$month&year=$year&load=1");
+    exit;
+}
+
 // Get clients
 $clients = [];
 try {
@@ -28,6 +103,7 @@ $selectedMonth = isset($_GET['month']) ? (int)$_GET['month'] : $previousMonth;
 $selectedYear = isset($_GET['year']) ? (int)$_GET['year'] : $previousYear;
 
 // Ensure attendance_summary table exists with correct structure
+// Note: employee_id is INT matching employees.employee_code (not UUID)
 try {
     // First check if table exists
     $checkTable = $db->query("SHOW TABLES LIKE 'attendance_summary'");
@@ -35,7 +111,7 @@ try {
         // Table doesn't exist, create it
         $db->exec("CREATE TABLE `attendance_summary` (
             `id` int(11) NOT NULL AUTO_INCREMENT,
-            `employee_id` varchar(36) NOT NULL,
+            `employee_id` int(11) NOT NULL,
             `unit_id` int(11) DEFAULT NULL,
             `month` int(2) NOT NULL,
             `year` int(4) NOT NULL,

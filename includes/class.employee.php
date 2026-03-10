@@ -126,11 +126,15 @@ class Employee {
 
         // Search filter
         if (!empty($filters['search'])) {
-            $sql .= " AND (e.employee_code LIKE :search
-                      OR e.full_name LIKE :search
-                      OR e.mobile_number LIKE :search
-                      OR e.aadhaar_number LIKE :search)";
-            $params['search'] = '%' . $filters['search'] . '%';
+            $sql .= " AND (e.employee_code LIKE :search1
+                      OR e.full_name LIKE :search2
+                      OR e.mobile_number LIKE :search3
+                      OR e.aadhaar_number LIKE :search4)";
+            $searchTerm = '%' . $filters['search'] . '%';
+            $params['search1'] = $searchTerm;
+            $params['search2'] = $searchTerm;
+            $params['search3'] = $searchTerm;
+            $params['search4'] = $searchTerm;
         }
 
         // Count total

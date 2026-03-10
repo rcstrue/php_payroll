@@ -6,6 +6,80 @@
 
 $pageTitle = 'Add Advance';
 
+// Handle POST - Save Advances
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_advance'])) {
+    $unitId = (int)$_POST['unit_id'];
+    $month = (int)$_POST['month'];
+    $year = (int)$_POST['year'];
+    $employeeCodes = $_POST['employee_code'] ?? [];
+    
+    $savedCount = 0;
+    $errors = [];
+    
+    try {
+        // Ensure table exists with correct structure (INT employee_id to match employee_code)
+        $db->exec("CREATE TABLE IF NOT EXISTS `employee_advances` (
+            `id` int(11) NOT NULL AUTO_INCREMENT,
+            `employee_id` int(11) NOT NULL,
+            `unit_id` int(11) DEFAULT NULL,
+            `month` int(2) NOT NULL,
+            `year` int(4) NOT NULL,
+            `adv1` decimal(10,2) DEFAULT 0.00,
+            `adv2` decimal(10,2) DEFAULT 0.00,
+            `office_advance` decimal(10,2) DEFAULT 0.00,
+            `dress_advance` decimal(10,2) DEFAULT 0.00,
+            `remarks` text DEFAULT NULL,
+            `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+            `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_emp_month_year` (`employee_id`, `month`, `year`),
+            KEY `idx_unit_month_year` (`unit_id`, `month`, `year`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    } catch (Exception $e) {
+        $errors[] = "Table creation failed: " . $e->getMessage();
+    }
+    
+    foreach ($employeeCodes as $empCode) {
+        $empCode = (int)$empCode;
+        $adv1 = isset($_POST['adv1'][$empCode]) ? floatval($_POST['adv1'][$empCode]) : 0;
+        $adv2 = isset($_POST['adv2'][$empCode]) ? floatval($_POST['adv2'][$empCode]) : 0;
+        $officeAdvance = isset($_POST['office_advance'][$empCode]) ? floatval($_POST['office_advance'][$empCode]) : 0;
+        $dressAdvance = isset($_POST['dress_advance'][$empCode]) ? floatval($_POST['dress_advance'][$empCode]) : 0;
+        
+        try {
+            // Use INSERT ... ON DUPLICATE KEY UPDATE for upsert
+            $stmt = $db->prepare("
+                INSERT INTO employee_advances 
+                (employee_id, unit_id, month, year, adv1, adv2, office_advance, dress_advance)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE 
+                    adv1 = VALUES(adv1),
+                    adv2 = VALUES(adv2),
+                    office_advance = VALUES(office_advance),
+                    dress_advance = VALUES(dress_advance),
+                    updated_at = CURRENT_TIMESTAMP
+            ");
+            $stmt->execute([$empCode, $unitId, $month, $year, $adv1, $adv2, $officeAdvance, $dressAdvance]);
+            $savedCount++;
+        } catch (Exception $e) {
+            $errors[] = "Failed to save advance for employee $empCode: " . $e->getMessage();
+        }
+    }
+    
+    if ($savedCount > 0 && empty($errors)) {
+        setFlash('success', "Advances saved successfully for $savedCount employees.");
+    } elseif ($savedCount > 0) {
+        setFlash('warning', "Advances saved for $savedCount employees. Some errors occurred.");
+    } else {
+        setFlash('error', "Failed to save advances. " . implode(', ', $errors));
+    }
+    
+    // Redirect to avoid form resubmission
+    header("Location: index.php?page=advance/add&client_id=" . ($_GET['client_id'] ?? '') . 
+           "&unit_id=$unitId&month=$month&year=$year&load=1");
+    exit;
+}
+
 // Get clients
 $clients = [];
 try {
@@ -28,6 +102,7 @@ $selectedMonth = isset($_GET['month']) ? (int)$_GET['month'] : $previousMonth;
 $selectedYear = isset($_GET['year']) ? (int)$_GET['year'] : $previousYear;
 
 // Ensure employee_advances table exists with correct structure
+// Note: employee_id is INT matching employees.employee_code (not UUID)
 try {
     // First check if table exists
     $checkTable = $db->query("SHOW TABLES LIKE 'employee_advances'");
@@ -35,7 +110,7 @@ try {
         // Table doesn't exist, create it
         $db->exec("CREATE TABLE `employee_advances` (
             `id` int(11) NOT NULL AUTO_INCREMENT,
-            `employee_id` varchar(36) NOT NULL,
+            `employee_id` int(11) NOT NULL,
             `unit_id` int(11) DEFAULT NULL,
             `month` int(2) NOT NULL,
             `year` int(4) NOT NULL,

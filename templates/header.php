@@ -214,7 +214,23 @@
         </div>
         
         <div class="sidebar-footer">
-            <div class="sidebar-footer-version">Version 1.2.0 | Mar 2026</div>
+            <?php
+            // Get last update time - try git first, then file modification
+            $lastUpdate = '';
+            $gitDir = dirname(__FILE__) . '/../.git';
+            if (is_dir($gitDir)) {
+                $gitLog = @shell_exec('cd ' . escapeshellarg(dirname(__FILE__) . '/..') . ' && git log -1 --format="%ci" 2>/dev/null');
+                if ($gitLog) {
+                    $lastUpdate = trim($gitLog);
+                }
+            }
+            if (empty($lastUpdate)) {
+                // Fallback to current file modification
+                $lastUpdate = date('Y-m-d H:i:s', filemtime(__FILE__));
+            }
+            ?>
+            <div class="sidebar-footer-version">Version 1.2.0</div>
+            <div class="sidebar-footer-version" style="font-size: 10px; opacity: 0.8;">Last Update: <?php echo date('d M Y H:i', strtotime($lastUpdate)); ?></div>
         </div>
     </nav>
     
