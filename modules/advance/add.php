@@ -86,55 +86,6 @@ if ($selectedClient) {
     }
 }
 
-// Handle save
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_advance'])) {
-    $unitId = (int)$_POST['unit_id'];
-    $month = (int)$_POST['month'];
-    $year = (int)$_POST['year'];
-    $employeeIds = $_POST['employee_id'] ?? [];
-    
-    // Get client_id from unit
-    $stmt = $db->prepare("SELECT client_id FROM units WHERE id = ?");
-    $stmt->execute([$unitId]);
-    $unitData = $stmt->fetch(PDO::FETCH_ASSOC);
-    $clientId = $unitData ? $unitData['client_id'] : 0;
-    
-    $savedCount = 0;
-    
-    try {
-        foreach ($employeeIds as $empId) {
-            $adv1 = isset($_POST['adv1'][$empId]) ? (float)$_POST['adv1'][$empId] : 0;
-            $adv2 = isset($_POST['adv2'][$empId]) ? (float)$_POST['adv2'][$empId] : 0;
-            $officeAdv = isset($_POST['office_advance'][$empId]) ? (float)$_POST['office_advance'][$empId] : 0;
-            $dressAdv = isset($_POST['dress_advance'][$empId]) ? (float)$_POST['dress_advance'][$empId] : 0;
-            
-            // Insert or update using ON DUPLICATE KEY
-            $stmt = $db->prepare("
-                INSERT INTO employee_advances 
-                (employee_id, unit_id, month, year, adv1, adv2, office_advance, dress_advance)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ON DUPLICATE KEY UPDATE 
-                    adv1 = VALUES(adv1),
-                    adv2 = VALUES(adv2),
-                    office_advance = VALUES(office_advance),
-                    dress_advance = VALUES(dress_advance),
-                    updated_at = CURRENT_TIMESTAMP
-            ");
-            $stmt->execute([$empId, $unitId, $month, $year, $adv1, $adv2, $officeAdv, $dressAdv]);
-            $savedCount++;
-        }
-        
-        setFlash('success', "Advances saved successfully! {$savedCount} employees updated.");
-        
-        // Redirect to same page with filters
-        header("Location: index.php?page=advance/add&client_id={$clientId}&unit_id={$unitId}&month={$month}&year={$year}&load=1");
-        exit;
-        
-    } catch (Exception $e) {
-        setFlash('error', 'Error saving advances: ' . $e->getMessage());
-    }
-}
-
 // Get employees and their advances when unit is selected
 $employees = [];
 if ($selectedUnit && isset($_GET['load'])) {
@@ -151,6 +102,7 @@ if ($selectedUnit && isset($_GET['load'])) {
     $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     // Get existing advances if any
+    // Note: employee_advances.employee_id stores employee_code (INT)
     foreach ($employees as &$emp) {
         try {
             $stmt = $db->prepare("
@@ -158,7 +110,7 @@ if ($selectedUnit && isset($_GET['load'])) {
                 FROM employee_advances
                 WHERE employee_id = ? AND month = ? AND year = ?
             ");
-            $stmt->execute([$emp['id'], $selectedMonth, $selectedYear]);
+            $stmt->execute([$emp['employee_code'], $selectedMonth, $selectedYear]);
             $existing = $stmt->fetch(PDO::FETCH_ASSOC);
             if ($existing) {
                 $emp['adv1'] = $existing['adv1'];
@@ -305,38 +257,38 @@ if ($selectedUnit && isset($_GET['load'])) {
                                 <tr>
                                     <td class="text-center"><?php echo $sr++; ?></td>
                                     <td>
-                                        <input type="hidden" name="employee_id[]" value="<?php echo $emp['id']; ?>">
+                                        <input type="hidden" name="employee_code[]" value="<?php echo $emp['employee_code']; ?>">
                                         <code><?php echo $emp['employee_code']; ?></code>
                                     </td>
                                     <td><?php echo sanitize($emp['full_name']); ?></td>
                                     <td><?php echo sanitize($emp['designation']); ?></td>
                                     <td><span class="badge bg-light text-dark"><?php echo sanitize($emp['worker_category']); ?></span></td>
                                     <td>
-                                        <input type="number" name="adv1[<?php echo $emp['id']; ?>]" 
+                                        <input type="number" name="adv1[<?php echo $emp['employee_code']; ?>]" 
                                                value="<?php echo $emp['adv1']; ?>" 
                                                class="form-control form-control-sm text-end advance-input" 
-                                               min="0" step="1" data-row="<?php echo $emp['id']; ?>">
+                                               min="0" step="1" data-row="<?php echo $emp['employee_code']; ?>">
                                     </td>
                                     <td>
-                                        <input type="number" name="adv2[<?php echo $emp['id']; ?>]" 
+                                        <input type="number" name="adv2[<?php echo $emp['employee_code']; ?>]" 
                                                value="<?php echo $emp['adv2']; ?>" 
                                                class="form-control form-control-sm text-end advance-input" 
-                                               min="0" step="1" data-row="<?php echo $emp['id']; ?>">
+                                               min="0" step="1" data-row="<?php echo $emp['employee_code']; ?>">
                                     </td>
                                     <td>
-                                        <input type="number" name="office_advance[<?php echo $emp['id']; ?>]" 
+                                        <input type="number" name="office_advance[<?php echo $emp['employee_code']; ?>]" 
                                                value="<?php echo $emp['office_advance']; ?>" 
                                                class="form-control form-control-sm text-end advance-input" 
-                                               min="0" step="1" data-row="<?php echo $emp['id']; ?>">
+                                               min="0" step="1" data-row="<?php echo $emp['employee_code']; ?>">
                                     </td>
                                     <td>
-                                        <input type="number" name="dress_advance[<?php echo $emp['id']; ?>]" 
+                                        <input type="number" name="dress_advance[<?php echo $emp['employee_code']; ?>]" 
                                                value="<?php echo $emp['dress_advance']; ?>" 
                                                class="form-control form-control-sm text-end advance-input" 
-                                               min="0" step="1" data-row="<?php echo $emp['id']; ?>">
+                                               min="0" step="1" data-row="<?php echo $emp['employee_code']; ?>">
                                     </td>
                                     <td>
-                                        <span class="fw-bold row-total" data-row="<?php echo $emp['id']; ?>">0</span>
+                                        <span class="fw-bold row-total" data-row="<?php echo $emp['employee_code']; ?>">0</span>
                                     </td>
                                 </tr>
                                 <?php endforeach; ?>

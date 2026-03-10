@@ -81,9 +81,9 @@ if (!$isLoggedIn) {
     
     $moduleAccess = array(
         'admin' => array('all'),
-        'hr_executive' => array('dashboard', 'employees', 'attendance', 'payroll', 'compliance', 'reports', 'settings', 'profile', 'auth'),
-        'hr' => array('dashboard', 'employees', 'attendance', 'payroll', 'compliance', 'reports', 'settings', 'profile', 'auth'),
-        'manager' => array('dashboard', 'employees', 'attendance', 'payroll', 'reports', 'profile', 'auth'),
+        'hr_executive' => array('dashboard', 'employees', 'attendance', 'payroll', 'compliance', 'reports', 'settings', 'profile', 'auth', 'advance'),
+        'hr' => array('dashboard', 'employees', 'attendance', 'payroll', 'compliance', 'reports', 'settings', 'profile', 'auth', 'advance'),
+        'manager' => array('dashboard', 'employees', 'attendance', 'payroll', 'reports', 'profile', 'auth', 'advance'),
         'supervisor' => array('dashboard', 'employees', 'attendance', 'profile', 'auth'),
         'worker' => array('dashboard', 'profile', 'payslips', 'auth')
     );
@@ -100,6 +100,14 @@ if (!$isLoggedIn) {
         $_SESSION['flash'] = array('type' => 'error', 'message' => 'You do not have access to this module.');
         header("Location: index.php?page=dashboard");
         exit;
+    }
+}
+
+// Handle POST requests that need redirect (before any output)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isLoggedIn) {
+    $postHandlerFile = dirname(__FILE__) . "/modules/{$page}/post.php";
+    if (file_exists($postHandlerFile)) {
+        include $postHandlerFile;
     }
 }
 
