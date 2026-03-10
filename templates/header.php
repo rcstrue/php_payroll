@@ -214,7 +214,7 @@
         </div>
         
         <div class="sidebar-footer">
-            <div class="sidebar-footer-version">Version 1.0.0</div>
+            <div class="sidebar-footer-version">Version 1.2.0 | Mar 2026</div>
         </div>
     </nav>
     
