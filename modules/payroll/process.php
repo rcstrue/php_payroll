@@ -272,32 +272,30 @@ $totals = [
 
 if ($selectedUnit && isset($_GET['load'])) {
     try {
-        // Check if payroll exists for this period
-        $periodStmt = $db->prepare("
-            SELECT * FROM payroll_periods 
-            WHERE month = ? AND year = ?
+        // First check if processed payroll records exist for this unit/month/year
+        $processedStmt = $db->prepare("
+            SELECT p.*, e.employee_code, e.full_name, e.worker_category, e.designation,
+                   att.total_present, att.overtime_hours,
+                   adv.adv1, adv.adv2, adv.office_advance, adv.dress_advance,
+                   pp.status as period_status
+            FROM payroll p
+            JOIN payroll_periods pp ON pp.id = p.payroll_period_id
+            LEFT JOIN employees e ON e.employee_code = p.employee_id
+            LEFT JOIN attendance_summary att ON att.employee_id = p.employee_id 
+                AND att.unit_id = p.unit_id AND att.month = pp.month AND att.year = pp.year
+            LEFT JOIN employee_advances adv ON adv.employee_id = e.id 
+                AND adv.unit_id = p.unit_id AND adv.month = pp.month AND adv.year = pp.year
+            WHERE p.unit_id = ? AND pp.month = ? AND pp.year = ?
+                AND p.status IN ('Processed', 'Approved', 'Paid')
+            ORDER BY e.employee_code
         ");
-        $periodStmt->execute([$selectedMonth, $selectedYear]);
-        $payrollPeriod = $periodStmt->fetch(PDO::FETCH_ASSOC);
+        $processedStmt->execute([$selectedUnit, $selectedMonth, $selectedYear]);
+        $processedData = $processedStmt->fetchAll(PDO::FETCH_ASSOC);
         
-        if ($payrollPeriod) {
-            // Get payroll records with employee details
-            // payroll.employee_id = INT matches employees.employee_code
-            $stmt = $db->prepare("
-                SELECT p.*, e.employee_code, e.full_name, e.worker_category, e.designation,
-                       att.total_present, att.overtime_hours,
-                       adv.adv1, adv.adv2, adv.office_advance, adv.dress_advance
-                FROM payroll p
-                LEFT JOIN employees e ON e.employee_code = p.employee_id
-                LEFT JOIN attendance_summary att ON att.employee_id = p.employee_id 
-                    AND att.unit_id = ? AND att.month = ? AND att.year = ?
-                LEFT JOIN employee_advances adv ON adv.employee_id = e.id 
-                    AND adv.unit_id = ? AND adv.month = ? AND adv.year = ?
-                WHERE p.payroll_period_id = ? AND p.unit_id = ?
-                ORDER BY e.employee_code
-            ");
-            $stmt->execute([$selectedUnit, $selectedMonth, $selectedYear, $selectedUnit, $selectedMonth, $selectedYear, $payrollPeriod['id'], $selectedUnit]);
-            $payrollData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (!empty($processedData)) {
+            // Show processed data
+            $payrollData = $processedData;
+            $payrollPeriod = true; // Mark as processed
             
             // Calculate totals from processed data
             foreach ($payrollData as $row) {
@@ -318,10 +316,8 @@ if ($selectedUnit && isset($_GET['load'])) {
                 $totals['employer_contrib'] += floatval($row['total_employer_contribution']);
                 $totals['ctc'] += floatval($row['ctc']);
             }
-        }
-        
-        // If no payroll data, get employees for preview
-        if (empty($payrollData)) {
+        } else {
+            // Show preview - get employees with salary and attendance
             $stmt = $db->prepare("
                 SELECT e.id, e.employee_code, e.full_name, e.worker_category, e.designation,
                        ess.basic_wage, ess.da, ess.hra, ess.other_allowance, ess.gross_salary,
