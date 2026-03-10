@@ -74,9 +74,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_advance'])) {
         setFlash('error', "Failed to save advances. " . implode(', ', $errors));
     }
     
-    // Redirect to avoid form resubmission
-    header("Location: index.php?page=advance/add&client_id=" . ($_GET['client_id'] ?? '') . 
-           "&unit_id=$unitId&month=$month&year=$year&load=1");
+    // Redirect using JavaScript since headers already sent
+    $redirectUrl = "index.php?page=advance/add&client_id=" . ($_GET['client_id'] ?? '') . 
+                   "&unit_id=$unitId&month=$month&year=$year&load=1";
+    echo "<script>window.location.href='$redirectUrl';</script>";
     exit;
 }
 
