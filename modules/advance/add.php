@@ -27,27 +27,51 @@ $selectedUnit = isset($_GET['unit_id']) ? (int)$_GET['unit_id'] : null;
 $selectedMonth = isset($_GET['month']) ? (int)$_GET['month'] : $previousMonth;
 $selectedYear = isset($_GET['year']) ? (int)$_GET['year'] : $previousYear;
 
-// Ensure employee_advances table exists
+// Ensure employee_advances table exists with correct structure
 try {
-    $db->exec("CREATE TABLE IF NOT EXISTS `employee_advances` (
-        `id` int(11) NOT NULL AUTO_INCREMENT,
-        `employee_id` varchar(36) NOT NULL,
-        `unit_id` int(11) DEFAULT NULL,
-        `month` int(2) NOT NULL,
-        `year` int(4) NOT NULL,
-        `adv1` decimal(10,2) DEFAULT 0.00,
-        `adv2` decimal(10,2) DEFAULT 0.00,
-        `office_advance` decimal(10,2) DEFAULT 0.00,
-        `dress_advance` decimal(10,2) DEFAULT 0.00,
-        `remarks` text DEFAULT NULL,
-        `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-        `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-        PRIMARY KEY (`id`),
-        UNIQUE KEY `uniq_emp_month_year` (`employee_id`, `month`, `year`),
-        KEY `idx_unit_month_year` (`unit_id`, `month`, `year`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    // First check if table exists
+    $checkTable = $db->query("SHOW TABLES LIKE 'employee_advances'");
+    if ($checkTable->rowCount() == 0) {
+        // Table doesn't exist, create it
+        $db->exec("CREATE TABLE `employee_advances` (
+            `id` int(11) NOT NULL AUTO_INCREMENT,
+            `employee_id` varchar(36) NOT NULL,
+            `unit_id` int(11) DEFAULT NULL,
+            `month` int(2) NOT NULL,
+            `year` int(4) NOT NULL,
+            `adv1` decimal(10,2) DEFAULT 0.00,
+            `adv2` decimal(10,2) DEFAULT 0.00,
+            `office_advance` decimal(10,2) DEFAULT 0.00,
+            `dress_advance` decimal(10,2) DEFAULT 0.00,
+            `remarks` text DEFAULT NULL,
+            `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+            `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_emp_month_year` (`employee_id`, `month`, `year`),
+            KEY `idx_unit_month_year` (`unit_id`, `month`, `year`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    } else {
+        // Table exists, check and add missing columns
+        $columns = $db->query("SHOW COLUMNS FROM employee_advances")->fetchAll(PDO::FETCH_COLUMN);
+        
+        if (!in_array('adv1', $columns)) {
+            $db->exec("ALTER TABLE employee_advances ADD COLUMN adv1 decimal(10,2) DEFAULT 0.00 AFTER year");
+        }
+        if (!in_array('adv2', $columns)) {
+            $db->exec("ALTER TABLE employee_advances ADD COLUMN adv2 decimal(10,2) DEFAULT 0.00 AFTER adv1");
+        }
+        if (!in_array('office_advance', $columns)) {
+            $db->exec("ALTER TABLE employee_advances ADD COLUMN office_advance decimal(10,2) DEFAULT 0.00 AFTER adv2");
+        }
+        if (!in_array('dress_advance', $columns)) {
+            $db->exec("ALTER TABLE employee_advances ADD COLUMN dress_advance decimal(10,2) DEFAULT 0.00 AFTER office_advance");
+        }
+        if (!in_array('remarks', $columns)) {
+            $db->exec("ALTER TABLE employee_advances ADD COLUMN remarks text AFTER dress_advance");
+        }
+    }
 } catch (Exception $e) {
-    // Table creation failed
+    // Table creation/modification failed
 }
 
 // Get units based on selected client

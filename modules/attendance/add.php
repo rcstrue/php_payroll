@@ -27,27 +27,51 @@ $selectedUnit = isset($_GET['unit_id']) ? (int)$_GET['unit_id'] : null;
 $selectedMonth = isset($_GET['month']) ? (int)$_GET['month'] : $previousMonth;
 $selectedYear = isset($_GET['year']) ? (int)$_GET['year'] : $previousYear;
 
-// Ensure attendance_summary table exists
+// Ensure attendance_summary table exists with correct structure
 try {
-    $db->exec("CREATE TABLE IF NOT EXISTS `attendance_summary` (
-        `id` int(11) NOT NULL AUTO_INCREMENT,
-        `employee_id` varchar(36) NOT NULL,
-        `unit_id` int(11) DEFAULT NULL,
-        `month` int(2) NOT NULL,
-        `year` int(4) NOT NULL,
-        `total_present` decimal(5,2) DEFAULT 0.00,
-        `total_extra` decimal(5,2) DEFAULT 0.00,
-        `overtime_hours` decimal(6,2) DEFAULT 0.00,
-        `total_wo` int(3) DEFAULT 0,
-        `source` enum('Manual','Excel Upload') DEFAULT 'Manual',
-        `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-        `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-        PRIMARY KEY (`id`),
-        UNIQUE KEY `uniq_emp_month_year` (`employee_id`, `month`, `year`),
-        KEY `idx_unit_month_year` (`unit_id`, `month`, `year`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    // First check if table exists
+    $checkTable = $db->query("SHOW TABLES LIKE 'attendance_summary'");
+    if ($checkTable->rowCount() == 0) {
+        // Table doesn't exist, create it
+        $db->exec("CREATE TABLE `attendance_summary` (
+            `id` int(11) NOT NULL AUTO_INCREMENT,
+            `employee_id` varchar(36) NOT NULL,
+            `unit_id` int(11) DEFAULT NULL,
+            `month` int(2) NOT NULL,
+            `year` int(4) NOT NULL,
+            `total_present` decimal(5,2) DEFAULT 0.00,
+            `total_extra` decimal(5,2) DEFAULT 0.00,
+            `overtime_hours` decimal(6,2) DEFAULT 0.00,
+            `total_wo` int(3) DEFAULT 0,
+            `source` enum('Manual','Excel Upload') DEFAULT 'Manual',
+            `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+            `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_emp_month_year` (`employee_id`, `month`, `year`),
+            KEY `idx_unit_month_year` (`unit_id`, `month`, `year`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    } else {
+        // Table exists, check and add missing columns
+        $columns = $db->query("SHOW COLUMNS FROM attendance_summary")->fetchAll(PDO::FETCH_COLUMN);
+        
+        if (!in_array('total_present', $columns)) {
+            $db->exec("ALTER TABLE attendance_summary ADD COLUMN total_present decimal(5,2) DEFAULT 0.00 AFTER year");
+        }
+        if (!in_array('total_extra', $columns)) {
+            $db->exec("ALTER TABLE attendance_summary ADD COLUMN total_extra decimal(5,2) DEFAULT 0.00 AFTER total_present");
+        }
+        if (!in_array('overtime_hours', $columns)) {
+            $db->exec("ALTER TABLE attendance_summary ADD COLUMN overtime_hours decimal(6,2) DEFAULT 0.00 AFTER total_extra");
+        }
+        if (!in_array('total_wo', $columns)) {
+            $db->exec("ALTER TABLE attendance_summary ADD COLUMN total_wo int(3) DEFAULT 0 AFTER overtime_hours");
+        }
+        if (!in_array('source', $columns)) {
+            $db->exec("ALTER TABLE attendance_summary ADD COLUMN source enum('Manual','Excel Upload') DEFAULT 'Manual' AFTER total_wo");
+        }
+    }
 } catch (Exception $e) {
-    // Table creation failed
+    // Table creation/modification failed
 }
 
 // Get units based on selected client
