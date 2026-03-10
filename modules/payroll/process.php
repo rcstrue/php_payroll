@@ -1,10 +1,10 @@
 <?php
 /**
- * RCS HRMS Pro - Process Payroll
- * Client/Unit wise payroll processing like Add Attendance
+ * RCS HRMS Pro - Process Payroll (Wage Register)
+ * Full wage register type sheet with all earnings and deductions
  */
 
-$pageTitle = 'Process Payroll';
+$pageTitle = 'Wage Register';
 
 // Get clients
 $clients = [];
@@ -67,6 +67,8 @@ try {
         `basic_wage` decimal(12,2) DEFAULT 0.00,
         `da` decimal(12,2) DEFAULT 0.00,
         `hra` decimal(12,2) DEFAULT 0.00,
+        `other_allowances` decimal(12,2) DEFAULT 0.00,
+        `overtime_amount` decimal(12,2) DEFAULT 0.00,
         `gross_earnings` decimal(12,2) DEFAULT 0.00,
         `pf_employee` decimal(12,2) DEFAULT 0.00,
         `esi_employee` decimal(12,2) DEFAULT 0.00,
@@ -77,6 +79,8 @@ try {
         `net_pay` decimal(12,2) DEFAULT 0.00,
         `pf_employer` decimal(12,2) DEFAULT 0.00,
         `esi_employer` decimal(12,2) DEFAULT 0.00,
+        `employer_contribution` decimal(12,2) DEFAULT 0.00,
+        `ctc` decimal(12,2) DEFAULT 0.00,
         `status` enum('Draft','Processed','Paid') DEFAULT 'Draft',
         `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
         PRIMARY KEY (`id`),
@@ -84,6 +88,86 @@ try {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 } catch (Exception $e) {
     error_log("Table creation failed: " . $e->getMessage());
+}
+
+// Days in selected month
+$daysInMonth = cal_days_in_month(CAL_GREGORIAN, $selectedMonth, $selectedYear);
+
+// Helper function to calculate payroll
+function calculatePayroll($emp, $daysInMonth) {
+    $paidDays = floatval($emp['total_present'] ?? $daysInMonth);
+    $basicWage = floatval($emp['basic_wage'] ?? 0);
+    $da = floatval($emp['da'] ?? 0);
+    $hra = floatval($emp['hra'] ?? 0);
+    $grossSalary = floatval($emp['gross_salary'] ?? 0);
+    $otherAllowances = max(0, $grossSalary - $basicWage - $da - $hra);
+    
+    // Calculate per day and actual earnings
+    $perDaySalary = $grossSalary > 0 ? $grossSalary / $daysInMonth : 0;
+    $basic = round(($basicWage / $daysInMonth) * $paidDays, 0);
+    $daAmt = round(($da / $daysInMonth) * $paidDays, 0);
+    $hraAmt = round(($hra / $daysInMonth) * $paidDays, 0);
+    $otherAmt = round(($otherAllowances / $daysInMonth) * $paidDays, 0);
+    $grossEarnings = round($perDaySalary * $paidDays, 0);
+    
+    // Overtime calculation (if OT hours present)
+    $otHours = floatval($emp['overtime_hours'] ?? 0);
+    $otAmount = round($otHours * ($perDaySalary / 8) * 2, 0); // Double rate for OT
+    
+    // PF Employee (12% of basic, max 1800)
+    $pfEmployee = 0;
+    if (!empty($emp['pf_applicable']) && $basicWage > 0) {
+        $pfEmployee = min(round($basicWage * 0.12, 0), 1800);
+    }
+    
+    // ESI Employee (0.75% of gross, if gross <= 21000)
+    $esiEmployee = 0;
+    if (!empty($emp['esi_applicable']) && $grossEarnings <= 21000) {
+        $esiEmployee = round($grossEarnings * 0.0075, 0);
+    }
+    
+    // PT (Professional Tax - fixed, varies by state)
+    $pt = $grossEarnings >= 15000 ? 200 : 0;
+    
+    // Advance deductions
+    $advDeduction = floatval(($emp['adv1'] ?? 0) + ($emp['adv2'] ?? 0));
+    $officeAdv = floatval($emp['office_advance'] ?? 0);
+    $dressAdv = floatval($emp['dress_advance'] ?? 0);
+    
+    $totalDeductions = $pfEmployee + $esiEmployee + $pt + $advDeduction + $officeAdv + $dressAdv;
+    $netPay = max(0, $grossEarnings + $otAmount - $totalDeductions);
+    
+    // Employer contributions
+    $pfEmployer = $pfEmployee; // Same as employee for simplicity
+    $esiEmployer = $grossEarnings <= 21000 ? round($grossEarnings * 0.0325, 0) : 0; // 3.25%
+    $employerContribution = $pfEmployer + $esiEmployer;
+    $ctc = $grossEarnings + $employerContribution;
+    
+    return [
+        'paid_days' => $paidDays,
+        'basic' => $basic,
+        'da' => $daAmt,
+        'hra' => $hraAmt,
+        'other_allowances' => $otherAmt,
+        'ot_hours' => $otHours,
+        'ot_amount' => $otAmount,
+        'gross_earnings' => $grossEarnings,
+        'pf_employee' => $pfEmployee,
+        'esi_employee' => $esiEmployee,
+        'pt' => $pt,
+        'adv1' => floatval($emp['adv1'] ?? 0),
+        'adv2' => floatval($emp['adv2'] ?? 0),
+        'office_adv' => $officeAdv,
+        'dress_adv' => $dressAdv,
+        'advance_deduction' => $advDeduction,
+        'other_deductions' => 0,
+        'total_deductions' => $totalDeductions,
+        'net_pay' => $netPay,
+        'pf_employer' => $pfEmployer,
+        'esi_employer' => $esiEmployer,
+        'employer_contribution' => $employerContribution,
+        'ctc' => $ctc
+    ];
 }
 
 // Handle Process Payroll
@@ -98,12 +182,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_payroll'])) {
         // Create or get payroll period
         $periodStmt = $db->prepare("
             INSERT INTO payroll_periods (period_name, month, year, unit_id, client_id, status, pay_days, created_by)
-            VALUES (?, ?, ?, ?, ?, 'Draft', ?, ?)
-            ON DUPLICATE KEY UPDATE pay_days = VALUES(pay_days)
+            VALUES (?, ?, ?, ?, ?, 'Processed', ?, ?)
+            ON DUPLICATE KEY UPDATE pay_days = VALUES(pay_days), status = 'Processed', processed_at = NOW()
         ");
         $periodName = date('F Y', mktime(0, 0, 0, $month, 1, $year));
-        $payDays = cal_days_in_month(CAL_GREGORIAN, $month, $year);
-        $periodStmt->execute([$periodName, $month, $year, $unitId, $clientId, $payDays, $_SESSION['user_id'] ?? 1]);
+        $periodStmt->execute([$periodName, $month, $year, $unitId, $clientId, $daysInMonth, $_SESSION['user_id'] ?? 1]);
         
         // Get period ID
         $periodId = $db->lastInsertId();
@@ -115,7 +198,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_payroll'])) {
         
         // Get employees with attendance and salary
         $empStmt = $db->prepare("
-            SELECT e.employee_code, e.full_name, e.worker_category,
+            SELECT e.employee_code, e.full_name, e.worker_category, e.designation,
                    ess.basic_wage, ess.da, ess.hra, ess.gross_salary,
                    ess.pf_applicable, ess.esi_applicable,
                    att.total_present, att.total_extra, att.overtime_hours,
@@ -132,85 +215,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_payroll'])) {
         $employees = $empStmt->fetchAll(PDO::FETCH_ASSOC);
         
         $processedCount = 0;
-        $totalGross = 0;
-        $totalNet = 0;
-        $totalPF = 0;
-        $totalESI = 0;
+        $totals = ['gross' => 0, 'net' => 0, 'pf_emp' => 0, 'esi_emp' => 0, 'pf_employer' => 0, 'esi_employer' => 0, 'ctc' => 0];
         
         foreach ($employees as $emp) {
+            $calc = calculatePayroll($emp, $daysInMonth);
             $empCode = (int)$emp['employee_code'];
-            $paidDays = floatval($emp['total_present'] ?? $payDays);
-            $basicWage = floatval($emp['basic_wage'] ?? 0);
-            $grossSalary = floatval($emp['gross_salary'] ?? 0);
-            
-            // Calculate per day salary
-            $perDaySalary = $grossSalary / $payDays;
-            $grossEarnings = round($perDaySalary * $paidDays, 2);
-            
-            // Calculate deductions
-            $pfEmployee = 0;
-            $esiEmployee = 0;
-            $pt = 200; // Fixed PT (adjust as needed)
-            
-            if (!empty($emp['pf_applicable']) && $basicWage > 0) {
-                $pfEmployee = min(round($basicWage * 0.12, 2), 1800); // 12% of basic, max 1800
-            }
-            
-            if (!empty($emp['esi_applicable']) && $grossEarnings <= 21000) {
-                $esiEmployee = round($grossEarnings * 0.0075, 2); // 0.75% of gross
-            }
-            
-            // Advance deductions
-            $advDeduction = floatval(($emp['adv1'] ?? 0) + ($emp['adv2'] ?? 0));
-            
-            $totalDeductions = $pfEmployee + $esiEmployee + $pt + $advDeduction;
-            $netPay = max(0, $grossEarnings - $totalDeductions);
-            
-            // Employer contributions
-            $pfEmployer = $pfEmployee;
-            $esiEmployer = round($grossEarnings * 0.0325, 2); // 3.25%
             
             // Insert payroll record
             $insertStmt = $db->prepare("
                 INSERT INTO payroll_records 
-                (period_id, employee_id, paid_days, basic_wage, da, hra, gross_earnings,
-                 pf_employee, esi_employee, pt, advance_deduction, total_deductions, net_pay,
-                 pf_employer, esi_employer, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Processed')
+                (period_id, employee_id, paid_days, basic_wage, da, hra, other_allowances, overtime_amount,
+                 gross_earnings, pf_employee, esi_employee, pt, advance_deduction, other_deductions,
+                 total_deductions, net_pay, pf_employer, esi_employer, employer_contribution, ctc, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Processed')
                 ON DUPLICATE KEY UPDATE 
                     paid_days = VALUES(paid_days),
+                    basic_wage = VALUES(basic_wage),
                     gross_earnings = VALUES(gross_earnings),
                     net_pay = VALUES(net_pay),
+                    ctc = VALUES(ctc),
                     status = 'Processed'
             ");
             $insertStmt->execute([
-                $periodId, $empCode, $paidDays, $basicWage, 
-                floatval($emp['da'] ?? 0), floatval($emp['hra'] ?? 0), $grossEarnings,
-                $pfEmployee, $esiEmployee, $pt, $advDeduction, $totalDeductions, $netPay,
-                $pfEmployer, $esiEmployer
+                $periodId, $empCode, $calc['paid_days'], $calc['basic'], $calc['da'], $calc['hra'],
+                $calc['other_allowances'], $calc['ot_amount'], $calc['gross_earnings'],
+                $calc['pf_employee'], $calc['esi_employee'], $calc['pt'], 
+                $calc['advance_deduction'], $calc['other_deductions'],
+                $calc['total_deductions'], $calc['net_pay'],
+                $calc['pf_employer'], $calc['esi_employer'], $calc['employer_contribution'], $calc['ctc']
             ]);
             
             $processedCount++;
-            $totalGross += $grossEarnings;
-            $totalNet += $netPay;
-            $totalPF += $pfEmployee;
-            $totalESI += $esiEmployee;
+            $totals['gross'] += $calc['gross_earnings'];
+            $totals['net'] += $calc['net_pay'];
+            $totals['pf_emp'] += $calc['pf_employee'];
+            $totals['esi_emp'] += $calc['esi_employee'];
+            $totals['pf_employer'] += $calc['pf_employer'];
+            $totals['esi_employer'] += $calc['esi_employer'];
+            $totals['ctc'] += $calc['ctc'];
         }
         
-        // Update period status
-        $db->prepare("UPDATE payroll_periods SET status = 'Processed', processed_at = NOW() WHERE id = ?")
-           ->execute([$periodId]);
-        
-        $processResult = [
-            'success' => true,
-            'processed' => $processedCount,
-            'total_gross' => $totalGross,
-            'total_net' => $totalNet,
-            'total_pf' => $totalPF,
-            'total_esi' => $totalESI
-        ];
-        
-        setFlash('success', "Payroll processed for $processedCount employees. Total Net Pay: ₹" . number_format($totalNet));
+        setFlash('success', "Payroll processed for $processedCount employees. Net Pay: ₹" . number_format($totals['net']) . " | CTC: ₹" . number_format($totals['ctc']));
         
         // Redirect
         $redirectUrl = "index.php?page=payroll/process&client_id=$clientId&unit_id=$unitId&month=$month&year=$year&load=1";
@@ -225,7 +270,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_payroll'])) {
 // Get payroll data when unit is selected
 $payrollData = [];
 $payrollPeriod = null;
-$totals = ['employees' => 0, 'gross' => 0, 'deductions' => 0, 'net' => 0, 'pf' => 0, 'esi' => 0];
+$totals = [
+    'employees' => 0, 'present' => 0, 'basic' => 0, 'da' => 0, 'hra' => 0, 
+    'gross' => 0, 'pf_emp' => 0, 'esi_emp' => 0, 'pt' => 0, 
+    'adv' => 0, 'deductions' => 0, 'net' => 0,
+    'pf_employer' => 0, 'esi_employer' => 0, 'employer_contrib' => 0, 'ctc' => 0
+];
 
 if ($selectedUnit && isset($_GET['load'])) {
     try {
@@ -240,30 +290,47 @@ if ($selectedUnit && isset($_GET['load'])) {
         if ($payrollPeriod) {
             // Get payroll records with employee details
             $stmt = $db->prepare("
-                SELECT pr.*, e.full_name, e.worker_category, e.designation
+                SELECT pr.*, e.full_name, e.worker_category, e.designation,
+                       att.total_present, att.overtime_hours,
+                       adv.adv1, adv.adv2, adv.office_advance, adv.dress_advance
                 FROM payroll_records pr
                 LEFT JOIN employees e ON e.employee_code = pr.employee_id
+                LEFT JOIN attendance_summary att ON att.employee_id = pr.employee_id 
+                    AND att.unit_id = ? AND att.month = ? AND att.year = ?
+                LEFT JOIN employee_advances adv ON adv.employee_id = pr.employee_id 
+                    AND adv.unit_id = ? AND adv.month = ? AND adv.year = ?
                 WHERE pr.period_id = ?
                 ORDER BY e.employee_code
             ");
-            $stmt->execute([$payrollPeriod['id']]);
+            $stmt->execute([$selectedUnit, $selectedMonth, $selectedYear, $selectedUnit, $selectedMonth, $selectedYear, $payrollPeriod['id']]);
             $payrollData = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
-            // Calculate totals
+            // Calculate totals from processed data
             foreach ($payrollData as $row) {
                 $totals['employees']++;
+                $totals['present'] += floatval($row['paid_days']);
+                $totals['basic'] += floatval($row['basic_wage']);
+                $totals['da'] += floatval($row['da']);
+                $totals['hra'] += floatval($row['hra']);
                 $totals['gross'] += floatval($row['gross_earnings']);
+                $totals['pf_emp'] += floatval($row['pf_employee']);
+                $totals['esi_emp'] += floatval($row['esi_employee']);
+                $totals['pt'] += floatval($row['pt']);
+                $totals['adv'] += floatval($row['advance_deduction']);
                 $totals['deductions'] += floatval($row['total_deductions']);
                 $totals['net'] += floatval($row['net_pay']);
-                $totals['pf'] += floatval($row['pf_employee']);
-                $totals['esi'] += floatval($row['esi_employee']);
+                $totals['pf_employer'] += floatval($row['pf_employer']);
+                $totals['esi_employer'] += floatval($row['esi_employer']);
+                $totals['employer_contrib'] += floatval($row['employer_contribution']);
+                $totals['ctc'] += floatval($row['ctc']);
             }
         } else {
             // Get employees for preview (no payroll yet)
             $stmt = $db->prepare("
                 SELECT e.employee_code, e.full_name, e.worker_category, e.designation,
-                       ess.basic_wage, ess.gross_salary,
-                       att.total_present, att.total_extra,
+                       ess.basic_wage, ess.da, ess.hra, ess.gross_salary,
+                       ess.pf_applicable, ess.esi_applicable,
+                       att.total_present, att.total_extra, att.overtime_hours, att.total_wo,
                        adv.adv1, adv.adv2, adv.office_advance, adv.dress_advance
                 FROM employees e
                 LEFT JOIN employee_salary_structures ess ON e.id = ess.employee_id AND ess.effective_to IS NULL
@@ -276,21 +343,125 @@ if ($selectedUnit && isset($_GET['load'])) {
             ");
             $stmt->execute([$selectedUnit, $selectedMonth, $selectedYear, $selectedUnit, $selectedMonth, $selectedYear, $selectedUnit]);
             $payrollData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Calculate preview totals
+            foreach ($payrollData as $row) {
+                $calc = calculatePayroll($row, $daysInMonth);
+                $totals['employees']++;
+                $totals['present'] += $calc['paid_days'];
+                $totals['basic'] += $calc['basic'];
+                $totals['da'] += $calc['da'];
+                $totals['hra'] += $calc['hra'];
+                $totals['gross'] += $calc['gross_earnings'];
+                $totals['pf_emp'] += $calc['pf_employee'];
+                $totals['esi_emp'] += $calc['esi_employee'];
+                $totals['pt'] += $calc['pt'];
+                $totals['adv'] += $calc['advance_deduction'];
+                $totals['deductions'] += $calc['total_deductions'];
+                $totals['net'] += $calc['net_pay'];
+                $totals['pf_employer'] += $calc['pf_employer'];
+                $totals['esi_employer'] += $calc['esi_employer'];
+                $totals['employer_contrib'] += $calc['employer_contribution'];
+                $totals['ctc'] += $calc['ctc'];
+            }
         }
     } catch (Exception $e) {
         error_log("Error fetching payroll: " . $e->getMessage());
     }
 }
 
-// Days in selected month
-$daysInMonth = cal_days_in_month(CAL_GREGORIAN, $selectedMonth, $selectedYear);
+// Handle Export
+if (isset($_GET['export']) && !empty($payrollData)) {
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="wage_register_' . $selectedMonth . '_' . $selectedYear . '.csv"');
+    echo "\xEF\xBB\xBF";
+    
+    $output = fopen('php://output', 'w');
+    fputcsv($output, ['WAGE REGISTER - ' . date('F Y', mktime(0, 0, 0, $selectedMonth, 1, $selectedYear))]);
+    fputcsv($output, []);
+    
+    $headers = ['#', 'Emp Code', 'Employee Name', 'Designation', 'Category', 'Days', 
+                'Basic', 'DA', 'HRA', 'Other', 'OT Amt', 'Gross',
+                'PF(Emp)', 'ESI(Emp)', 'PT', 'Adv', 'Total Ded', 'Net Pay',
+                'PF(Empr)', 'ESI(Empr)', 'Empr Contrib', 'CTC'];
+    fputcsv($output, $headers);
+    
+    $sr = 1;
+    foreach ($payrollData as $row) {
+        if ($payrollPeriod) {
+            $data = [
+                $sr++,
+                $row['employee_id'],
+                $row['full_name'],
+                $row['designation'],
+                $row['worker_category'],
+                $row['paid_days'],
+                $row['basic_wage'],
+                $row['da'],
+                $row['hra'],
+                $row['other_allowances'],
+                $row['overtime_amount'],
+                $row['gross_earnings'],
+                $row['pf_employee'],
+                $row['esi_employee'],
+                $row['pt'],
+                $row['advance_deduction'],
+                $row['total_deductions'],
+                $row['net_pay'],
+                $row['pf_employer'],
+                $row['esi_employer'],
+                $row['employer_contribution'],
+                $row['ctc']
+            ];
+        } else {
+            $calc = calculatePayroll($row, $daysInMonth);
+            $data = [
+                $sr++,
+                $row['employee_code'],
+                $row['full_name'],
+                $row['designation'],
+                $row['worker_category'],
+                $calc['paid_days'],
+                $calc['basic'],
+                $calc['da'],
+                $calc['hra'],
+                $calc['other_allowances'],
+                $calc['ot_amount'],
+                $calc['gross_earnings'],
+                $calc['pf_employee'],
+                $calc['esi_employee'],
+                $calc['pt'],
+                $calc['advance_deduction'],
+                $calc['total_deductions'],
+                $calc['net_pay'],
+                $calc['pf_employer'],
+                $calc['esi_employer'],
+                $calc['employer_contribution'],
+                $calc['ctc']
+            ];
+        }
+        fputcsv($output, $data);
+    }
+    
+    // Totals row
+    fputcsv($output, [
+        '', '', 'TOTAL', '', '', $totals['present'],
+        $totals['basic'], $totals['da'], $totals['hra'], '', '',
+        $totals['gross'], $totals['pf_emp'], $totals['esi_emp'], $totals['pt'],
+        $totals['adv'], $totals['deductions'], $totals['net'],
+        $totals['pf_employer'], $totals['esi_employer'], $totals['employer_contrib'], $totals['ctc']
+    ]);
+    
+    fclose($output);
+    exit;
+}
 ?>
 
 <div class="row">
     <div class="col-12">
         <div class="card">
             <div class="card-header">
-                <h5 class="card-title mb-0"><i class="bi bi-cash-stack me-2"></i>Process Payroll</h5>
+                <h5 class="card-title mb-0"><i class="bi bi-cash-stack me-2"></i>Wage Register</h5>
             </div>
             <div class="card-body">
                 <!-- Filters Form -->
@@ -358,7 +529,7 @@ $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $selectedMonth, $selectedYear);
 </div>
 
 <?php if ($selectedUnit && isset($_GET['load'])): ?>
-<!-- Payroll Grid -->
+<!-- Wage Register Grid -->
 <div class="row mt-3">
     <div class="col-12">
         <div class="card">
@@ -368,16 +539,16 @@ $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $selectedMonth, $selectedYear);
                     <span class="badge bg-secondary ms-2">Days: <?php echo $daysInMonth; ?></span>
                     <span class="badge bg-primary ms-2"><?php echo count($payrollData); ?> Employees</span>
                     <?php if ($payrollPeriod): ?>
-                    <span class="badge bg-<?php echo $payrollPeriod['status'] == 'Processed' ? 'success' : ($payrollPeriod['status'] == 'Approved' ? 'primary' : 'secondary'); ?> ms-2">
-                        <?php echo $payrollPeriod['status']; ?>
-                    </span>
+                    <span class="badge bg-success ms-2"><?php echo $payrollPeriod['status']; ?></span>
+                    <?php else: ?>
+                    <span class="badge bg-warning ms-2">Preview</span>
                     <?php endif; ?>
                 </div>
                 <div>
                     <?php if (!empty($payrollData)): ?>
-                    <button type="button" class="btn btn-success btn-sm" onclick="exportPayroll()">
+                    <a href="<?php echo $_SERVER['REQUEST_URI']; ?>&export=1" class="btn btn-success btn-sm">
                         <i class="bi bi-download me-1"></i>Export
-                    </button>
+                    </a>
                     <?php endif; ?>
                     <a href="index.php?page=payroll/process" class="btn btn-outline-secondary btn-sm">
                         <i class="bi bi-x-lg me-1"></i>Clear
@@ -393,39 +564,65 @@ $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $selectedMonth, $selectedYear);
                 <?php else: ?>
                 
                 <?php if (!$payrollPeriod): ?>
-                <!-- Preview Mode - Show Process Button -->
-                <div class="alert alert-warning m-3">
-                    <i class="bi bi-exclamation-triangle me-2"></i>
-                    <strong>Preview Mode:</strong> Payroll not yet processed for this period. 
-                    Review the data below and click "Process Payroll" to generate salary.
+                <!-- Preview Mode -->
+                <div class="alert alert-warning m-3 d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>Preview Mode:</strong> Review the wage register below before processing.
+                    </div>
+                    <form method="POST">
+                        <input type="hidden" name="client_id" value="<?php echo $selectedClient; ?>">
+                        <input type="hidden" name="unit_id" value="<?php echo $selectedUnit; ?>">
+                        <input type="hidden" name="month" value="<?php echo $selectedMonth; ?>">
+                        <input type="hidden" name="year" value="<?php echo $selectedYear; ?>">
+                        <button type="submit" name="process_payroll" class="btn btn-success" onclick="return confirm('Process payroll for this period?')">
+                            <i class="bi bi-check-lg me-1"></i>Process Payroll
+                        </button>
+                    </form>
                 </div>
-                <form method="POST" class="m-3">
-                    <input type="hidden" name="client_id" value="<?php echo $selectedClient; ?>">
-                    <input type="hidden" name="unit_id" value="<?php echo $selectedUnit; ?>">
-                    <input type="hidden" name="month" value="<?php echo $selectedMonth; ?>">
-                    <input type="hidden" name="year" value="<?php echo $selectedYear; ?>">
-                    <button type="submit" name="process_payroll" class="btn btn-success" onclick="return confirm('Process payroll for this period?')">
-                        <i class="bi bi-play-fill me-1"></i>Process Payroll
-                    </button>
-                </form>
+                <?php else: ?>
+                <!-- Processed Mode -->
+                <div class="alert alert-success m-3">
+                    <i class="bi bi-check-circle me-2"></i>
+                    <strong>Processed:</strong> Payroll has been processed. 
+                    Net Pay: <strong>₹<?php echo number_format($totals['net']); ?></strong> | 
+                    CTC: <strong>₹<?php echo number_format($totals['ctc']); ?></strong>
+                </div>
                 <?php endif; ?>
                 
-                <div class="table-responsive">
-                    <table class="table table-bordered table-hover mb-0" style="font-size: 12px;">
-                        <thead class="table-dark">
+                <div class="table-responsive" style="max-height: 70vh;">
+                    <table class="table table-bordered table-hover mb-0" style="font-size: 11px;">
+                        <thead class="table-dark" style="position: sticky; top: 0; z-index: 10;">
                             <tr>
-                                <th style="width: 40px;">#</th>
-                                <th style="width: 80px;">Emp Code</th>
-                                <th style="width: 150px;">Employee Name</th>
-                                <th style="width: 80px;">Category</th>
-                                <th style="width: 60px;" class="text-center">Days</th>
-                                <th style="width: 100px;" class="text-end">Basic</th>
-                                <th style="width: 100px;" class="text-end">Gross</th>
-                                <th style="width: 80px;" class="text-end text-danger">PF</th>
-                                <th style="width: 80px;" class="text-end text-danger">ESI</th>
-                                <th style="width: 80px;" class="text-end text-danger">PT</th>
-                                <th style="width: 80px;" class="text-end text-danger">Adv</th>
-                                <th style="width: 100px;" class="text-end text-success">Net Pay</th>
+                                <th rowspan="2" style="width: 30px;">#</th>
+                                <th rowspan="2" style="width: 60px;">Emp Code</th>
+                                <th rowspan="2" style="width: 120px;">Employee Name</th>
+                                <th rowspan="2" style="width: 80px;">Category</th>
+                                <th rowspan="2" style="width: 40px;" class="text-center bg-secondary">Days</th>
+                                <th colspan="6" class="text-center bg-success">EARNINGS</th>
+                                <th colspan="5" class="text-center bg-danger">DEDUCTIONS</th>
+                                <th rowspan="2" class="text-center bg-primary text-white">Net Pay</th>
+                                <th colspan="3" class="text-center bg-info">EMPLOYER CONTRIBUTION</th>
+                                <th rowspan="2" class="text-center bg-warning text-dark">CTC</th>
+                            </tr>
+                            <tr>
+                                <!-- Earnings -->
+                                <th class="text-end bg-success bg-opacity-25">Basic</th>
+                                <th class="text-end bg-success bg-opacity-25">DA</th>
+                                <th class="text-end bg-success bg-opacity-25">HRA</th>
+                                <th class="text-end bg-success bg-opacity-25">Other</th>
+                                <th class="text-end bg-success bg-opacity-25">OT</th>
+                                <th class="text-end bg-success bg-opacity-25">Gross</th>
+                                <!-- Deductions -->
+                                <th class="text-end bg-danger bg-opacity-25">PF</th>
+                                <th class="text-end bg-danger bg-opacity-25">ESI</th>
+                                <th class="text-end bg-danger bg-opacity-25">PT</th>
+                                <th class="text-end bg-danger bg-opacity-25">Adv</th>
+                                <th class="text-end bg-danger bg-opacity-25">Total</th>
+                                <!-- Employer -->
+                                <th class="text-end bg-info bg-opacity-25">PF</th>
+                                <th class="text-end bg-info bg-opacity-25">ESI</th>
+                                <th class="text-end bg-info bg-opacity-25">Total</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -433,56 +630,101 @@ $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $selectedMonth, $selectedYear);
                             $sr = 1;
                             foreach ($payrollData as $row): 
                                 if ($payrollPeriod) {
-                                    // Processed payroll data
+                                    // Processed data
                                     $paidDays = $row['paid_days'];
                                     $basic = $row['basic_wage'];
+                                    $da = $row['da'];
+                                    $hra = $row['hra'];
+                                    $other = $row['other_allowances'];
+                                    $ot = $row['overtime_amount'];
                                     $gross = $row['gross_earnings'];
-                                    $pf = $row['pf_employee'];
-                                    $esi = $row['esi_employee'];
+                                    $pfEmp = $row['pf_employee'];
+                                    $esiEmp = $row['esi_employee'];
                                     $pt = $row['pt'];
                                     $adv = $row['advance_deduction'];
+                                    $totalDed = $row['total_deductions'];
                                     $net = $row['net_pay'];
+                                    $pfEmpr = $row['pf_employer'];
+                                    $esiEmpr = $row['esi_employer'];
+                                    $emprContrib = $row['employer_contribution'];
+                                    $ctc = $row['ctc'];
                                 } else {
                                     // Preview data
-                                    $paidDays = $row['total_present'] ?? $daysInMonth;
-                                    $basic = $row['basic_wage'] ?? 0;
-                                    $grossSalary = $row['gross_salary'] ?? 0;
-                                    $perDay = $grossSalary / $daysInMonth;
-                                    $gross = round($perDay * $paidDays, 2);
-                                    $pf = ($basic > 0 && $basic <= 15000) ? min(round($basic * 0.12, 2), 1800) : 0;
-                                    $esi = ($gross <= 21000) ? round($gross * 0.0075, 2) : 0;
-                                    $pt = 200;
-                                    $adv = ($row['adv1'] ?? 0) + ($row['adv2'] ?? 0);
-                                    $net = max(0, $gross - $pf - $esi - $pt - $adv);
+                                    $calc = calculatePayroll($row, $daysInMonth);
+                                    $paidDays = $calc['paid_days'];
+                                    $basic = $calc['basic'];
+                                    $da = $calc['da'];
+                                    $hra = $calc['hra'];
+                                    $other = $calc['other_allowances'];
+                                    $ot = $calc['ot_amount'];
+                                    $gross = $calc['gross_earnings'];
+                                    $pfEmp = $calc['pf_employee'];
+                                    $esiEmp = $calc['esi_employee'];
+                                    $pt = $calc['pt'];
+                                    $adv = $calc['advance_deduction'];
+                                    $totalDed = $calc['total_deductions'];
+                                    $net = $calc['net_pay'];
+                                    $pfEmpr = $calc['pf_employer'];
+                                    $esiEmpr = $calc['esi_employer'];
+                                    $emprContrib = $calc['employer_contribution'];
+                                    $ctc = $calc['ctc'];
                                 }
                             ?>
                             <tr>
                                 <td class="text-center"><?php echo $sr++; ?></td>
                                 <td><code><?php echo $row['employee_code'] ?? $row['employee_id']; ?></code></td>
                                 <td><?php echo sanitize($row['full_name']); ?></td>
-                                <td><span class="badge bg-light text-dark"><?php echo sanitize($row['worker_category']); ?></span></td>
+                                <td><small><?php echo sanitize($row['worker_category']); ?></small></td>
                                 <td class="text-center"><?php echo $paidDays; ?></td>
-                                <td class="text-end"><?php echo number_format($basic, 0); ?></td>
-                                <td class="text-end fw-bold"><?php echo number_format($gross, 0); ?></td>
-                                <td class="text-end text-danger"><?php echo $pf > 0 ? number_format($pf, 0) : '-'; ?></td>
-                                <td class="text-end text-danger"><?php echo $esi > 0 ? number_format($esi, 0) : '-'; ?></td>
-                                <td class="text-end text-danger"><?php echo $pt > 0 ? number_format($pt, 0) : '-'; ?></td>
-                                <td class="text-end text-danger"><?php echo $adv > 0 ? number_format($adv, 0) : '-'; ?></td>
-                                <td class="text-end fw-bold text-success"><?php echo number_format($net, 0); ?></td>
+                                <!-- Earnings -->
+                                <td class="text-end"><?php echo $basic > 0 ? number_format($basic) : '-'; ?></td>
+                                <td class="text-end"><?php echo $da > 0 ? number_format($da) : '-'; ?></td>
+                                <td class="text-end"><?php echo $hra > 0 ? number_format($hra) : '-'; ?></td>
+                                <td class="text-end"><?php echo $other > 0 ? number_format($other) : '-'; ?></td>
+                                <td class="text-end"><?php echo $ot > 0 ? number_format($ot) : '-'; ?></td>
+                                <td class="text-end fw-bold text-success"><?php echo number_format($gross); ?></td>
+                                <!-- Deductions -->
+                                <td class="text-end text-danger"><?php echo $pfEmp > 0 ? number_format($pfEmp) : '-'; ?></td>
+                                <td class="text-end text-danger"><?php echo $esiEmp > 0 ? number_format($esiEmp) : '-'; ?></td>
+                                <td class="text-end text-danger"><?php echo $pt > 0 ? number_format($pt) : '-'; ?></td>
+                                <td class="text-end text-danger"><?php echo $adv > 0 ? number_format($adv) : '-'; ?></td>
+                                <td class="text-end text-danger fw-bold"><?php echo number_format($totalDed); ?></td>
+                                <!-- Net Pay -->
+                                <td class="text-end fw-bold text-primary" style="background-color: #e8f4f8;"><?php echo number_format($net); ?></td>
+                                <!-- Employer Contribution -->
+                                <td class="text-end text-info"><?php echo $pfEmpr > 0 ? number_format($pfEmpr) : '-'; ?></td>
+                                <td class="text-end text-info"><?php echo $esiEmpr > 0 ? number_format($esiEmpr) : '-'; ?></td>
+                                <td class="text-end text-info fw-bold"><?php echo number_format($emprContrib); ?></td>
+                                <!-- CTC -->
+                                <td class="text-end fw-bold text-warning" style="background-color: #fff3cd;"><?php echo number_format($ctc); ?></td>
                             </tr>
                             <?php endforeach; ?>
                         </tbody>
                         <tfoot class="table-light">
                             <tr class="fw-bold">
-                                <td colspan="4" class="text-end">TOTAL</td>
-                                <td></td>
-                                <td></td>
-                                <td class="text-end"><?php echo number_format($totals['gross'] > 0 ? $totals['gross'] : array_sum(array_column($payrollData, 'gross_earnings')), 0); ?></td>
-                                <td class="text-end text-danger"><?php echo number_format($totals['pf'] > 0 ? $totals['pf'] : 0, 0); ?></td>
-                                <td class="text-end text-danger"><?php echo number_format($totals['esi'] > 0 ? $totals['esi'] : 0, 0); ?></td>
-                                <td class="text-end text-danger"><?php echo number_format($totals['employees'] * 200, 0); ?></td>
-                                <td class="text-end text-danger"></td>
-                                <td class="text-end text-success"><?php echo number_format($totals['net'] > 0 ? $totals['net'] : 0, 0); ?></td>
+                                <td colspan="4" class="text-end">TOTAL (<?php echo $totals['employees']; ?> Employees)</td>
+                                <td class="text-center"><?php echo number_format($totals['present'], 0); ?></td>
+                                <!-- Earnings -->
+                                <td class="text-end"><?php echo number_format($totals['basic']); ?></td>
+                                <td class="text-end"><?php echo number_format($totals['da']); ?></td>
+                                <td class="text-end"><?php echo number_format($totals['hra']); ?></td>
+                                <td class="text-end"></td>
+                                <td class="text-end"></td>
+                                <td class="text-end text-success"><?php echo number_format($totals['gross']); ?></td>
+                                <!-- Deductions -->
+                                <td class="text-end text-danger"><?php echo number_format($totals['pf_emp']); ?></td>
+                                <td class="text-end text-danger"><?php echo number_format($totals['esi_emp']); ?></td>
+                                <td class="text-end text-danger"><?php echo number_format($totals['pt']); ?></td>
+                                <td class="text-end text-danger"><?php echo number_format($totals['adv']); ?></td>
+                                <td class="text-end text-danger"><?php echo number_format($totals['deductions']); ?></td>
+                                <!-- Net Pay -->
+                                <td class="text-end text-primary" style="background-color: #cce5ff;"><?php echo number_format($totals['net']); ?></td>
+                                <!-- Employer -->
+                                <td class="text-end text-info"><?php echo number_format($totals['pf_employer']); ?></td>
+                                <td class="text-end text-info"><?php echo number_format($totals['esi_employer']); ?></td>
+                                <td class="text-end text-info"><?php echo number_format($totals['employer_contrib']); ?></td>
+                                <!-- CTC -->
+                                <td class="text-end text-warning" style="background-color: #ffeeba;"><?php echo number_format($totals['ctc']); ?></td>
                             </tr>
                         </tfoot>
                     </table>
@@ -526,13 +768,6 @@ document.getElementById('clientSelect').addEventListener('change', function() {
             unitSelect.innerHTML = '<option value="">Select Unit</option>';
         });
 });
-
-// Export payroll
-function exportPayroll() {
-    const params = new URLSearchParams(window.location.search);
-    params.set('export', '1');
-    window.location.href = 'index.php?' + params.toString();
-}
 </script>
 JS;
 ?>
