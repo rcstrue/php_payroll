@@ -2,7 +2,6 @@
 /**
  * RCS HRMS Pro - Print Payslip Page
  * Standalone page for printing individual payslips
- * Updated for new database schema
  */
 
 define('APP_ROOT', dirname(__DIR__, 2));
@@ -10,25 +9,38 @@ define('RCS_HRMS', true);
 require_once APP_ROOT . '/config/config.php';
 require_once APP_ROOT . '/includes/database.php';
 
-// Initialize classes
-$payrollObj = new Payroll();
-
 $payrollId = $_GET['id'] ?? null;
 
 if (!$payrollId) {
     die('Payslip ID required');
 }
 
-$data = $payrollObj->getPayslip($payrollId, null);
+// Get payroll record
+$stmt = $db->prepare("
+    SELECT pr.*, pp.period_name, pp.month, pp.year, pp.start_date, pp.end_date, pp.pay_days,
+           e.full_name, e.employee_code, e.designation, e.department,
+           e.client_name, e.unit_name, e.date_of_joining,
+           e.uan_number, e.esic_number,
+           e.bank_name, e.account_number, e.ifsc_code
+    FROM payroll_records pr
+    JOIN payroll_periods pp ON pr.period_id = pp.id
+    LEFT JOIN employees e ON e.employee_code = pr.employee_id
+    WHERE pr.id = ?
+");
+$stmt->execute([$payrollId]);
+$data = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$data) {
     die('Payslip not found');
 }
 
-// Get period info
-$period = $db->prepare("SELECT * FROM payroll_periods WHERE id = ?");
-$period->execute([$data['payroll_period_id'] ?? 0]);
-$periodData = $period->fetch(PDO::FETCH_ASSOC);
+// Get company settings
+$company = $db->fetch("SELECT * FROM company_settings LIMIT 1") ?? [
+    'company_name' => 'RCS TRUE FACILITIES PVT LTD',
+    'address' => '110, Someswar Square, Vesu, Surat - 395007, Gujarat',
+    'gst_number' => '24AAICR1390M1Z3',
+    'pan_number' => 'AAICR1390M'
+];
 ?>
 <!DOCTYPE html>
 <html>
@@ -181,24 +193,26 @@ $periodData = $period->fetch(PDO::FETCH_ASSOC);
     </style>
 </head>
 <body>
+    <?php if (!isset($_GET['print'])): ?>
     <div class="no-print mb-3">
         <button onclick="window.print()" class="btn btn-primary">
-            Print
+            <i class="bi bi-printer me-1"></i>Print
         </button>
         <button onclick="window.close()" class="btn btn-secondary">Close</button>
     </div>
+    <?php endif; ?>
     
     <div class="payslip-container">
         <!-- Header -->
         <div class="payslip-header">
             <div>
-                <div class="company-name">RCS TRUE FACILITIES PVT LTD</div>
-                <div class="company-address">110, Someswar Square, Vesu, Surat - 395007, Gujarat</div>
-                <div class="company-address">GST: 24AAICR1390M1Z3 | PAN: AAICR1390M</div>
+                <div class="company-name"><?php echo sanitize($company['company_name']); ?></div>
+                <div class="company-address"><?php echo sanitize($company['address']); ?></div>
+                <div class="company-address">GST: <?php echo sanitize($company['gst_number']); ?> | PAN: <?php echo sanitize($company['pan_number']); ?></div>
             </div>
             <div class="payslip-period">
                 <div class="label">PAYSLIP FOR</div>
-                <div class="value"><?php echo sanitize($periodData['period_name'] ?? date('F Y')); ?></div>
+                <div class="value"><?php echo sanitize($data['period_name'] ?? date('F Y', mktime(0, 0, 0, $data['month'], 1, $data['year']))); ?></div>
             </div>
         </div>
         
@@ -206,7 +220,7 @@ $periodData = $period->fetch(PDO::FETCH_ASSOC);
         <div class="employee-info">
             <div class="info-item">
                 <div class="label">Employee Code</div>
-                <div class="value"><?php echo sanitize($data['employee_id'] ?? '-'); ?></div>
+                <div class="value"><?php echo sanitize($data['employee_code'] ?? $data['employee_id']); ?></div>
             </div>
             <div class="info-item">
                 <div class="label">Employee Name</div>
@@ -226,7 +240,7 @@ $periodData = $period->fetch(PDO::FETCH_ASSOC);
             </div>
             <div class="info-item">
                 <div class="label">Paid Days</div>
-                <div class="value"><?php echo $data['paid_days'] ?? 0; ?> / <?php echo $data['total_days'] ?? 30; ?></div>
+                <div class="value"><?php echo $data['paid_days'] ?? 0; ?> / <?php echo $data['pay_days'] ?? 30; ?></div>
             </div>
             <div class="info-item">
                 <div class="label">UAN Number</div>
@@ -245,37 +259,35 @@ $periodData = $period->fetch(PDO::FETCH_ASSOC);
                 <div class="section-title">EARNINGS</div>
                 <div class="payslip-row">
                     <span>Basic</span>
-                    <span><?php echo formatCurrency($data['basic'] ?? 0); ?></span>
+                    <span><?php echo number_format($data['basic_wage'] ?? 0); ?></span>
                 </div>
+                <?php if (($data['da'] ?? 0) > 0): ?>
                 <div class="payslip-row">
                     <span>Dearness Allowance</span>
-                    <span><?php echo formatCurrency($data['da'] ?? 0); ?></span>
+                    <span><?php echo number_format($data['da']); ?></span>
                 </div>
+                <?php endif; ?>
+                <?php if (($data['hra'] ?? 0) > 0): ?>
                 <div class="payslip-row">
                     <span>House Rent Allowance</span>
-                    <span><?php echo formatCurrency($data['hra'] ?? 0); ?></span>
+                    <span><?php echo number_format($data['hra']); ?></span>
                 </div>
+                <?php endif; ?>
+                <?php if (($data['other_allowances'] ?? 0) > 0): ?>
                 <div class="payslip-row">
-                    <span>Conveyance</span>
-                    <span><?php echo formatCurrency($data['conveyance'] ?? 0); ?></span>
+                    <span>Other Allowances</span>
+                    <span><?php echo number_format($data['other_allowances']); ?></span>
                 </div>
-                <div class="payslip-row">
-                    <span>Medical Allowance</span>
-                    <span><?php echo formatCurrency($data['medical_allowance'] ?? 0); ?></span>
-                </div>
-                <div class="payslip-row">
-                    <span>Special Allowance</span>
-                    <span><?php echo formatCurrency($data['special_allowance'] ?? 0); ?></span>
-                </div>
+                <?php endif; ?>
                 <?php if (($data['overtime_amount'] ?? 0) > 0): ?>
                 <div class="payslip-row">
-                    <span>Overtime (<?php echo $data['overtime_hours'] ?? 0; ?> hrs)</span>
-                    <span><?php echo formatCurrency($data['overtime_amount']); ?></span>
+                    <span>Overtime</span>
+                    <span><?php echo number_format($data['overtime_amount']); ?></span>
                 </div>
                 <?php endif; ?>
                 <div class="payslip-row total">
                     <span>GROSS EARNINGS</span>
-                    <span><?php echo formatCurrency($data['gross_earnings'] ?? 0); ?></span>
+                    <span><?php echo number_format($data['gross_earnings'] ?? 0); ?></span>
                 </div>
             </div>
             
@@ -285,37 +297,55 @@ $periodData = $period->fetch(PDO::FETCH_ASSOC);
                 <?php if (($data['pf_employee'] ?? 0) > 0): ?>
                 <div class="payslip-row">
                     <span>Provident Fund</span>
-                    <span><?php echo formatCurrency($data['pf_employee']); ?></span>
+                    <span><?php echo number_format($data['pf_employee']); ?></span>
                 </div>
                 <?php endif; ?>
                 <?php if (($data['esi_employee'] ?? 0) > 0): ?>
                 <div class="payslip-row">
                     <span>ESI Contribution</span>
-                    <span><?php echo formatCurrency($data['esi_employee']); ?></span>
+                    <span><?php echo number_format($data['esi_employee']); ?></span>
                 </div>
                 <?php endif; ?>
-                <?php if (($data['professional_tax'] ?? 0) > 0): ?>
+                <?php if (($data['pt'] ?? 0) > 0): ?>
                 <div class="payslip-row">
                     <span>Professional Tax</span>
-                    <span><?php echo formatCurrency($data['professional_tax']); ?></span>
+                    <span><?php echo number_format($data['pt']); ?></span>
+                </div>
+                <?php endif; ?>
+                <?php if (($data['advance_deduction'] ?? 0) > 0): ?>
+                <div class="payslip-row">
+                    <span>Advance</span>
+                    <span><?php echo number_format($data['advance_deduction']); ?></span>
+                </div>
+                <?php endif; ?>
+                <?php if (($data['other_deductions'] ?? 0) > 0): ?>
+                <div class="payslip-row">
+                    <span>Other Deductions</span>
+                    <span><?php echo number_format($data['other_deductions']); ?></span>
                 </div>
                 <?php endif; ?>
                 <div class="payslip-row total">
                     <span>TOTAL DEDUCTIONS</span>
-                    <span><?php echo formatCurrency($data['total_deductions'] ?? 0); ?></span>
+                    <span><?php echo number_format($data['total_deductions'] ?? 0); ?></span>
                 </div>
                 
                 <div class="section-title mt-4">EMPLOYER CONTRIBUTION</div>
-                <?php if (($data['pf_employer'] ?? 0) > 0 || ($data['eps_employer'] ?? 0) > 0): ?>
+                <?php if (($data['pf_employer'] ?? 0) > 0): ?>
                 <div class="payslip-row">
-                    <span>PF + EPS</span>
-                    <span><?php echo formatCurrency(($data['pf_employer'] ?? 0) + ($data['eps_employer'] ?? 0)); ?></span>
+                    <span>PF (Employer)</span>
+                    <span><?php echo number_format($data['pf_employer']); ?></span>
                 </div>
                 <?php endif; ?>
                 <?php if (($data['esi_employer'] ?? 0) > 0): ?>
                 <div class="payslip-row">
-                    <span>ESI</span>
-                    <span><?php echo formatCurrency($data['esi_employer']); ?></span>
+                    <span>ESI (Employer)</span>
+                    <span><?php echo number_format($data['esi_employer']); ?></span>
+                </div>
+                <?php endif; ?>
+                <?php if (($data['employer_contribution'] ?? 0) > 0): ?>
+                <div class="payslip-row">
+                    <span><strong>Total Employer Contribution</strong></span>
+                    <span><strong><?php echo number_format($data['employer_contribution']); ?></strong></span>
                 </div>
                 <?php endif; ?>
             </div>
@@ -325,7 +355,7 @@ $periodData = $period->fetch(PDO::FETCH_ASSOC);
         <div class="payslip-footer">
             <div>
                 <div class="net-pay-label">NET PAY</div>
-                <div class="net-pay-value"><?php echo formatCurrency($data['net_pay'] ?? 0); ?></div>
+                <div class="net-pay-value">₹<?php echo number_format($data['net_pay'] ?? 0); ?></div>
             </div>
             <div class="text-end">
                 <div class="small text-muted">
@@ -345,5 +375,13 @@ $periodData = $period->fetch(PDO::FETCH_ASSOC);
             </div>
         </div>
     </div>
+    
+    <?php if (isset($_GET['print'])): ?>
+    <script>
+        window.onload = function() {
+            window.print();
+        };
+    </script>
+    <?php endif; ?>
 </body>
 </html>
