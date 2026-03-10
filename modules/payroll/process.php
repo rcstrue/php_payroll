@@ -2,6 +2,14 @@
 /**
  * RCS HRMS Pro - Process Payroll (Wage Register)
  * Full wage register type sheet with all earnings and deductions
+ * 
+ * Database Schema Notes:
+ * - employees.id = VARCHAR(36) UUID
+ * - employees.employee_code = INT(10) UNSIGNED
+ * - attendance_summary.employee_id = INT(11) → matches employee_code
+ * - employee_advances.employee_id = VARCHAR(36) → matches employees.id
+ * - employee_salary_structures.employee_id = VARCHAR(36) → matches employees.id
+ * - payroll.employee_id = INT(11) → matches employee_code
  */
 
 $pageTitle = 'Wage Register';
@@ -42,53 +50,18 @@ if ($selectedClient) {
 // Days in selected month
 $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $selectedMonth, $selectedYear);
 
-// Create attendance_summary and employee_advances tables if not exist
-try {
-    $db->exec("CREATE TABLE IF NOT EXISTS `attendance_summary` (
-        `id` int(11) NOT NULL AUTO_INCREMENT,
-        `employee_id` int(11) NOT NULL,
-        `unit_id` int(11) DEFAULT NULL,
-        `month` int(2) NOT NULL,
-        `year` int(4) NOT NULL,
-        `total_present` decimal(5,2) DEFAULT 0.00,
-        `total_absent` decimal(5,2) DEFAULT 0.00,
-        `total_extra` decimal(5,2) DEFAULT 0.00,
-        `total_wo` decimal(5,2) DEFAULT 0.00,
-        `overtime_hours` decimal(6,2) DEFAULT 0.00,
-        `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-        `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-        PRIMARY KEY (`id`),
-        UNIQUE KEY `uniq_emp_month_year` (`employee_id`, `unit_id`, `month`, `year`),
-        KEY `idx_unit_month` (`unit_id`, `month`, `year`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-
-    $db->exec("CREATE TABLE IF NOT EXISTS `employee_advances` (
-        `id` int(11) NOT NULL AUTO_INCREMENT,
-        `employee_id` int(11) NOT NULL,
-        `unit_id` int(11) DEFAULT NULL,
-        `month` int(2) NOT NULL,
-        `year` int(4) NOT NULL,
-        `adv1` decimal(10,2) DEFAULT 0.00,
-        `adv2` decimal(10,2) DEFAULT 0.00,
-        `office_advance` decimal(10,2) DEFAULT 0.00,
-        `dress_advance` decimal(10,2) DEFAULT 0.00,
-        `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-        `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-        PRIMARY KEY (`id`),
-        UNIQUE KEY `uniq_emp_month_year` (`employee_id`, `unit_id`, `month`, `year`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-} catch (Exception $e) {
-    error_log("Table creation failed: " . $e->getMessage());
-}
-
 // Helper function to calculate payroll
 function calculatePayroll($emp, $daysInMonth) {
     $paidDays = floatval($emp['total_present'] ?? $daysInMonth);
-    $basicWage = floatval($emp['basic_salary'] ?? $emp['basic'] ?? 0);
+    $basicWage = floatval($emp['basic_wage'] ?? 0);
     $da = floatval($emp['da'] ?? 0);
     $hra = floatval($emp['hra'] ?? 0);
-    $otherAllowances = floatval($emp['other_allowances'] ?? 0);
-    $grossSalary = $basicWage + $da + $hra + $otherAllowances;
+    $otherAllowances = floatval($emp['other_allowance'] ?? 0);
+    $grossSalary = floatval($emp['gross_salary'] ?? 0);
+    
+    if ($grossSalary == 0) {
+        $grossSalary = $basicWage + $da + $hra + $otherAllowances;
+    }
     
     // Calculate per day and actual earnings
     $perDaySalary = $grossSalary > 0 ? $grossSalary / $daysInMonth : 0;
@@ -104,13 +77,13 @@ function calculatePayroll($emp, $daysInMonth) {
     
     // PF Employee (12% of basic, max 1800)
     $pfEmployee = 0;
-    if (!empty($emp['is_pf_applicable']) && $basicWage > 0) {
+    if (!empty($emp['pf_applicable']) && $basicWage > 0) {
         $pfEmployee = min(round($basicWage * 0.12, 0), 1800);
     }
     
     // ESI Employee (0.75% of gross, if gross <= 21000)
     $esiEmployee = 0;
-    if (!empty($emp['is_esi_applicable']) && $grossEarnings <= 21000) {
+    if (!empty($emp['esi_applicable']) && $grossEarnings <= 21000) {
         $esiEmployee = round($grossEarnings * 0.0075, 0);
     }
     
@@ -125,7 +98,7 @@ function calculatePayroll($emp, $daysInMonth) {
     $totalDeductions = $pfEmployee + $esiEmployee + $pt + $advDeduction + $officeAdv + $dressAdv;
     $netPay = max(0, $grossEarnings + $otAmount - $totalDeductions);
     
-    // Employer contribution
+    // Employer contributions
     $pfEmployer = $pfEmployee; // Same as employee for simplicity
     $esiEmployer = $grossEarnings <= 21000 ? round($grossEarnings * 0.0325, 0) : 0; // 3.25%
     $employerContribution = $pfEmployer + $esiEmployer;
@@ -147,7 +120,7 @@ function calculatePayroll($emp, $daysInMonth) {
         'adv2' => floatval($emp['adv2'] ?? 0),
         'office_adv' => $officeAdv,
         'dress_adv' => $dressAdv,
-        'advance_deduction' => $advDeduction,
+        'advance_deduction' => $advDeduction + $officeAdv + $dressAdv,
         'other_deductions' => 0,
         'total_deductions' => $totalDeductions,
         'net_pay' => $netPay,
@@ -167,7 +140,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_payroll'])) {
     $year = (int)$_POST['year'];
     
     try {
-        // Create or update payroll period
+        // Create or get payroll period
         $periodStmt = $db->prepare("
             SELECT id FROM payroll_periods WHERE month = ? AND year = ?
         ");
@@ -176,8 +149,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_payroll'])) {
         
         if (!$periodId) {
             $periodStmt = $db->prepare("
-                INSERT INTO payroll_periods (period_name, month, year, start_date, end_date, status, created_by)
-                VALUES (?, ?, ?, ?, ?, 'approved', ?)
+                INSERT INTO payroll_periods (period_name, month, year, start_date, end_date, status, processed_by, processed_at)
+                VALUES (?, ?, ?, ?, ?, 'Processed', ?, NOW())
             ");
             $periodName = date('F Y', mktime(0, 0, 0, $month, 1, $year));
             $startDate = "$year-" . str_pad($month, 2, '0', STR_PAD_LEFT) . "-01";
@@ -187,20 +160,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_payroll'])) {
         }
         
         // Get employees with attendance and salary
+        // Key: attendance_summary.employee_id matches employees.employee_code (INT)
+        // Key: employee_advances.employee_id matches employees.id (UUID)
+        // Key: employee_salary_structures.employee_id matches employees.id (UUID)
         $empStmt = $db->prepare("
-            SELECT e.id, e.employee_code, e.first_name, e.middle_name, e.last_name, e.worker_category, e.designation,
-                   e.basic_salary, e.da, e.hra, e.other_allowances,
-                   e.is_pf_applicable, e.is_esi_applicable,
+            SELECT e.id, e.employee_code, e.full_name, e.worker_category, e.designation,
+                   ess.basic_wage, ess.da, ess.hra, ess.other_allowance, ess.gross_salary,
+                   ess.pf_applicable, ess.esi_applicable,
                    att.total_present, att.overtime_hours,
-                   adv.adv1, adv.adv2, adv.office_advance, adv.dress_advance,
-                   ss.basic as ss_basic, ss.da as ss_da, ss.hra as ss_hra, ss.other_allowances as ss_other
+                   adv.adv1, adv.adv2, adv.office_advance, adv.dress_advance
             FROM employees e
-            LEFT JOIN attendance_summary att ON att.employee_id = e.id 
+            LEFT JOIN employee_salary_structures ess ON e.id = ess.employee_id AND ess.effective_to IS NULL
+            LEFT JOIN attendance_summary att ON att.employee_id = e.employee_code 
                 AND att.unit_id = ? AND att.month = ? AND att.year = ?
             LEFT JOIN employee_advances adv ON adv.employee_id = e.id 
                 AND adv.unit_id = ? AND adv.month = ? AND adv.year = ?
-            LEFT JOIN salary_structures ss ON e.id = ss.employee_id AND ss.effective_to IS NULL
-            WHERE e.unit_id = ? AND e.status = 'active'
+            WHERE e.unit_id = ? AND e.status != 'pending_hr_verification'
         ");
         $empStmt->execute([$unitId, $month, $year, $unitId, $month, $year, $unitId]);
         $employees = $empStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -209,55 +184,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['process_payroll'])) {
         $totals = ['gross' => 0, 'net' => 0, 'pf_emp' => 0, 'esi_emp' => 0, 'pf_employer' => 0, 'esi_employer' => 0, 'ctc' => 0];
         
         foreach ($employees as $emp) {
-            // Use salary_structures if available, else employee table values
-            if (!empty($emp['ss_basic'])) {
-                $emp['basic_salary'] = $emp['ss_basic'];
-                $emp['da'] = $emp['ss_da'];
-                $emp['hra'] = $emp['ss_hra'];
-                $emp['other_allowances'] = $emp['ss_other'];
+            // Skip if no salary structure
+            if (empty($emp['basic_wage']) && empty($emp['gross_salary'])) {
+                continue;
             }
             
             $calc = calculatePayroll($emp, $daysInMonth);
-            $empId = (int)$emp['id'];
+            $empCode = (int)$emp['employee_code'];
             
             // Check if payroll record exists
             $checkStmt = $db->prepare("SELECT id FROM payroll WHERE payroll_period_id = ? AND employee_id = ?");
-            $checkStmt->execute([$periodId, $empId]);
+            $checkStmt->execute([$periodId, $empCode]);
             $exists = $checkStmt->fetchColumn();
             
             if ($exists) {
                 // Update
                 $updateStmt = $db->prepare("
                     UPDATE payroll SET 
-                        present_days = ?, paid_days = ?, basic = ?, da = ?, hra = ?, other_allowances = ?,
-                        overtime_hours = ?, overtime_amount = ?, 
-                        pf_employee = ?, esi_employee = ?, pt_employee = ?, advance_deduction = ?,
-                        net_salary = ?, pf_employer = ?, esi_employer = ?, employer_contribution = ?, total_cost = ?,
-                        is_processed = 1, processed_at = NOW()
+                        total_days = ?, paid_days = ?, basic = ?, da = ?, hra = ?, other_allowance = ?,
+                        overtime_hours = ?, overtime_amount = ?, gross_earnings = ?,
+                        pf_employee = ?, esi_employee = ?, professional_tax = ?, salary_advance = ?,
+                        total_deductions = ?, net_pay = ?,
+                        pf_employer = ?, esi_employer = ?, total_employer_contribution = ?, ctc = ?,
+                        status = 'Processed', updated_at = NOW()
                     WHERE id = ?
                 ");
                 $updateStmt->execute([
-                    $calc['paid_days'], $calc['paid_days'], $calc['basic'], $calc['da'], $calc['hra'], $calc['other_allowances'],
-                    $calc['ot_hours'], $calc['ot_amount'],
+                    $daysInMonth, $calc['paid_days'], $calc['basic'], $calc['da'], $calc['hra'], $calc['other_allowances'],
+                    $calc['ot_hours'], $calc['ot_amount'], $calc['gross_earnings'],
                     $calc['pf_employee'], $calc['esi_employee'], $calc['pt'], $calc['advance_deduction'],
-                    $calc['net_pay'], $calc['pf_employer'], $calc['esi_employer'], $calc['employer_contribution'], $calc['ctc'],
+                    $calc['total_deductions'], $calc['net_pay'],
+                    $calc['pf_employer'], $calc['esi_employer'], $calc['employer_contribution'], $calc['ctc'],
                     $exists
                 ]);
             } else {
                 // Insert
                 $insertStmt = $db->prepare("
                     INSERT INTO payroll 
-                    (payroll_period_id, employee_id, unit_id, client_id, present_days, paid_days, basic, da, hra, other_allowances,
-                     overtime_hours, overtime_amount, pf_employee, esi_employee, pt_employee, advance_deduction,
-                     net_salary, pf_employer, esi_employer, employer_contribution, total_cost, is_processed, processed_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())
+                    (payroll_period_id, employee_id, unit_id, total_days, paid_days, basic, da, hra, other_allowance,
+                     overtime_hours, overtime_amount, gross_earnings,
+                     pf_employee, esi_employee, professional_tax, salary_advance,
+                     total_deductions, net_pay, 
+                     pf_employer, esi_employer, total_employer_contribution, ctc, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Processed')
                 ");
                 $insertStmt->execute([
-                    $periodId, $empId, $unitId, $clientId, $calc['paid_days'], $calc['paid_days'],
+                    $periodId, $empCode, $unitId, $daysInMonth, $calc['paid_days'],
                     $calc['basic'], $calc['da'], $calc['hra'], $calc['other_allowances'],
-                    $calc['ot_hours'], $calc['ot_amount'],
+                    $calc['ot_hours'], $calc['ot_amount'], $calc['gross_earnings'],
                     $calc['pf_employee'], $calc['esi_employee'], $calc['pt'], $calc['advance_deduction'],
-                    $calc['net_pay'], $calc['pf_employer'], $calc['esi_employer'], $calc['employer_contribution'], $calc['ctc']
+                    $calc['total_deductions'], $calc['net_pay'],
+                    $calc['pf_employer'], $calc['esi_employer'], $calc['employer_contribution'], $calc['ctc']
                 ]);
             }
             
@@ -305,15 +282,16 @@ if ($selectedUnit && isset($_GET['load'])) {
         
         if ($payrollPeriod) {
             // Get payroll records with employee details
+            // payroll.employee_id = INT matches employees.employee_code
             $stmt = $db->prepare("
-                SELECT p.*, e.employee_code, e.first_name, e.middle_name, e.last_name, e.worker_category, e.designation,
+                SELECT p.*, e.employee_code, e.full_name, e.worker_category, e.designation,
                        att.total_present, att.overtime_hours,
                        adv.adv1, adv.adv2, adv.office_advance, adv.dress_advance
                 FROM payroll p
-                LEFT JOIN employees e ON e.id = p.employee_id
+                LEFT JOIN employees e ON e.employee_code = p.employee_id
                 LEFT JOIN attendance_summary att ON att.employee_id = p.employee_id 
                     AND att.unit_id = ? AND att.month = ? AND att.year = ?
-                LEFT JOIN employee_advances adv ON adv.employee_id = p.employee_id 
+                LEFT JOIN employee_advances adv ON adv.employee_id = e.id 
                     AND adv.unit_id = ? AND adv.month = ? AND adv.year = ?
                 WHERE p.payroll_period_id = ? AND p.unit_id = ?
                 ORDER BY e.employee_code
@@ -323,42 +301,40 @@ if ($selectedUnit && isset($_GET['load'])) {
             
             // Calculate totals from processed data
             foreach ($payrollData as $row) {
-                $gross = floatval($row['basic']) + floatval($row['da']) + floatval($row['hra']) + floatval($row['other_allowances']);
                 $totals['employees']++;
                 $totals['present'] += floatval($row['paid_days']);
                 $totals['basic'] += floatval($row['basic']);
                 $totals['da'] += floatval($row['da']);
                 $totals['hra'] += floatval($row['hra']);
-                $totals['gross'] += $gross;
+                $totals['gross'] += floatval($row['gross_earnings']);
                 $totals['pf_emp'] += floatval($row['pf_employee']);
                 $totals['esi_emp'] += floatval($row['esi_employee']);
-                $totals['pt'] += floatval($row['pt_employee']);
-                $totals['adv'] += floatval($row['advance_deduction']);
-                $totals['deductions'] += floatval($row['pf_employee']) + floatval($row['esi_employee']) + floatval($row['pt_employee']) + floatval($row['advance_deduction']);
-                $totals['net'] += floatval($row['net_salary']);
+                $totals['pt'] += floatval($row['professional_tax']);
+                $totals['adv'] += floatval($row['salary_advance']);
+                $totals['deductions'] += floatval($row['total_deductions']);
+                $totals['net'] += floatval($row['net_pay']);
                 $totals['pf_employer'] += floatval($row['pf_employer']);
                 $totals['esi_employer'] += floatval($row['esi_employer']);
-                $totals['employer_contrib'] += floatval($row['employer_contribution']);
-                $totals['ctc'] += floatval($row['total_cost']);
+                $totals['employer_contrib'] += floatval($row['total_employer_contribution']);
+                $totals['ctc'] += floatval($row['ctc']);
             }
         }
         
-        // If no payroll data or we want preview, get employees
+        // If no payroll data, get employees for preview
         if (empty($payrollData)) {
             $stmt = $db->prepare("
-                SELECT e.id, e.employee_code, e.first_name, e.middle_name, e.last_name, e.worker_category, e.designation,
-                       e.basic_salary, e.da, e.hra, e.other_allowances,
-                       e.is_pf_applicable, e.is_esi_applicable,
-                       att.total_present, att.total_extra, att.overtime_hours, att.total_wo,
-                       adv.adv1, adv.adv2, adv.office_advance, adv.dress_advance,
-                       ss.basic as ss_basic, ss.da as ss_da, ss.hra as ss_hra, ss.other_allowances as ss_other
+                SELECT e.id, e.employee_code, e.full_name, e.worker_category, e.designation,
+                       ess.basic_wage, ess.da, ess.hra, ess.other_allowance, ess.gross_salary,
+                       ess.pf_applicable, ess.esi_applicable,
+                       att.total_present, att.overtime_hours,
+                       adv.adv1, adv.adv2, adv.office_advance, adv.dress_advance
                 FROM employees e
-                LEFT JOIN attendance_summary att ON att.employee_id = e.id 
+                LEFT JOIN employee_salary_structures ess ON e.id = ess.employee_id AND ess.effective_to IS NULL
+                LEFT JOIN attendance_summary att ON att.employee_id = e.employee_code 
                     AND att.unit_id = ? AND att.month = ? AND att.year = ?
                 LEFT JOIN employee_advances adv ON adv.employee_id = e.id 
                     AND adv.unit_id = ? AND adv.month = ? AND adv.year = ?
-                LEFT JOIN salary_structures ss ON e.id = ss.employee_id AND ss.effective_to IS NULL
-                WHERE e.unit_id = ? AND e.status = 'active'
+                WHERE e.unit_id = ? AND e.status != 'pending_hr_verification'
                 ORDER BY e.employee_code
             ");
             $stmt->execute([$selectedUnit, $selectedMonth, $selectedYear, $selectedUnit, $selectedMonth, $selectedYear, $selectedUnit]);
@@ -367,12 +343,9 @@ if ($selectedUnit && isset($_GET['load'])) {
             
             // Calculate preview totals
             foreach ($payrollData as $row) {
-                // Use salary_structures if available, else employee table values
-                if (!empty($row['ss_basic'])) {
-                    $row['basic_salary'] = $row['ss_basic'];
-                    $row['da'] = $row['ss_da'];
-                    $row['hra'] = $row['ss_hra'];
-                    $row['other_allowances'] = $row['ss_other'];
+                // Skip if no salary structure
+                if (empty($row['basic_wage']) && empty($row['gross_salary'])) {
+                    continue;
                 }
                 
                 $calc = calculatePayroll($row, $daysInMonth);
@@ -418,44 +391,41 @@ if (isset($_GET['export']) && !empty($payrollData)) {
     $sr = 1;
     foreach ($payrollData as $row) {
         if ($payrollPeriod) {
-            $gross = $row['basic'] + $row['da'] + $row['hra'] + $row['other_allowances'];
-            $totalDed = $row['pf_employee'] + $row['esi_employee'] + $row['pt_employee'] + $row['advance_deduction'];
+            $totalDed = $row['pf_employee'] + $row['esi_employee'] + $row['professional_tax'] + $row['salary_advance'];
             $data = [
                 $sr++,
                 $row['employee_code'],
-                trim($row['first_name'] . ' ' . ($row['middle_name'] ?? '') . ' ' . ($row['last_name'] ?? '')),
+                $row['full_name'],
                 $row['designation'],
                 $row['worker_category'],
                 $row['paid_days'],
                 $row['basic'],
                 $row['da'],
                 $row['hra'],
-                $row['other_allowances'],
+                $row['other_allowance'],
                 $row['overtime_amount'],
-                $gross,
+                $row['gross_earnings'],
                 $row['pf_employee'],
                 $row['esi_employee'],
-                $row['pt_employee'],
-                $row['advance_deduction'],
+                $row['professional_tax'],
+                $row['salary_advance'],
                 $totalDed,
-                $row['net_salary'],
+                $row['net_pay'],
                 $row['pf_employer'],
                 $row['esi_employer'],
-                $row['employer_contribution'],
-                $row['total_cost']
+                $row['total_employer_contribution'],
+                $row['ctc']
             ];
         } else {
-            if (!empty($row['ss_basic'])) {
-                $row['basic_salary'] = $row['ss_basic'];
-                $row['da'] = $row['ss_da'];
-                $row['hra'] = $row['ss_hra'];
-                $row['other_allowances'] = $row['ss_other'];
+            // Skip if no salary
+            if (empty($row['basic_wage']) && empty($row['gross_salary'])) {
+                continue;
             }
             $calc = calculatePayroll($row, $daysInMonth);
             $data = [
                 $sr++,
                 $row['employee_code'],
-                trim($row['first_name'] . ' ' . ($row['middle_name'] ?? '') . ' ' . ($row['last_name'] ?? '')),
+                $row['full_name'],
                 $row['designation'],
                 $row['worker_category'],
                 $calc['paid_days'],
@@ -574,7 +544,7 @@ if (isset($_GET['export']) && !empty($payrollData)) {
                 <div>
                     <span class="badge bg-info"><?php echo date('F Y', mktime(0, 0, 0, $selectedMonth, 1, $selectedYear)); ?></span>
                     <span class="badge bg-secondary ms-2">Days: <?php echo $daysInMonth; ?></span>
-                    <span class="badge bg-primary ms-2"><?php echo count($payrollData); ?> Employees</span>
+                    <span class="badge bg-primary ms-2"><?php echo $totals['employees']; ?> Employees</span>
                     <?php if ($payrollPeriod): ?>
                     <span class="badge bg-success ms-2"><?php echo $payrollPeriod['status']; ?></span>
                     <?php else: ?>
@@ -593,11 +563,11 @@ if (isset($_GET['export']) && !empty($payrollData)) {
                 </div>
             </div>
             <div class="card-body p-0">
-                <?php if (empty($payrollData)): ?>
+                <?php if (empty($payrollData) || $totals['employees'] == 0): ?>
                 <div class="text-center py-5 text-muted">
                     <i class="bi bi-people fs-1"></i>
-                    <p class="mt-2">No employees found for this unit.</p>
-                    <p class="small">Make sure employees are assigned to this unit and have salary structures defined.</p>
+                    <p class="mt-2">No employees found for this unit with salary structure.</p>
+                    <p class="small">Make sure employees have salary structures defined in employee_salary_structures table.</p>
                 </div>
                 <?php else: ?>
                 
@@ -673,29 +643,26 @@ if (isset($_GET['export']) && !empty($payrollData)) {
                                     $basic = $row['basic'];
                                     $da = $row['da'];
                                     $hra = $row['hra'];
-                                    $other = $row['other_allowances'];
+                                    $other = $row['other_allowance'];
                                     $ot = $row['overtime_amount'];
-                                    $gross = $basic + $da + $hra + $other;
+                                    $gross = $row['gross_earnings'];
                                     $pfEmp = $row['pf_employee'];
                                     $esiEmp = $row['esi_employee'];
-                                    $pt = $row['pt_employee'];
-                                    $adv = $row['advance_deduction'];
-                                    $totalDed = $pfEmp + $esiEmp + $pt + $adv;
-                                    $net = $row['net_salary'];
+                                    $pt = $row['professional_tax'];
+                                    $adv = $row['salary_advance'];
+                                    $totalDed = $row['total_deductions'];
+                                    $net = $row['net_pay'];
                                     $pfEmpr = $row['pf_employer'];
                                     $esiEmpr = $row['esi_employer'];
-                                    $emprContrib = $row['employer_contribution'];
-                                    $ctc = $row['total_cost'];
+                                    $emprContrib = $row['total_employer_contribution'];
+                                    $ctc = $row['ctc'];
                                     $empCode = $row['employee_code'];
-                                    $empName = trim($row['first_name'] . ' ' . ($row['middle_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
+                                    $empName = $row['full_name'];
                                     $category = $row['worker_category'];
                                 } else {
-                                    // Preview data - use salary_structures if available
-                                    if (!empty($row['ss_basic'])) {
-                                        $row['basic_salary'] = $row['ss_basic'];
-                                        $row['da'] = $row['ss_da'];
-                                        $row['hra'] = $row['ss_hra'];
-                                        $row['other_allowances'] = $row['ss_other'];
+                                    // Preview data - skip if no salary
+                                    if (empty($row['basic_wage']) && empty($row['gross_salary'])) {
+                                        continue;
                                     }
                                     $calc = calculatePayroll($row, $daysInMonth);
                                     $paidDays = $calc['paid_days'];
@@ -716,7 +683,7 @@ if (isset($_GET['export']) && !empty($payrollData)) {
                                     $emprContrib = $calc['employer_contribution'];
                                     $ctc = $calc['ctc'];
                                     $empCode = $row['employee_code'];
-                                    $empName = trim($row['first_name'] . ' ' . ($row['middle_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
+                                    $empName = $row['full_name'];
                                     $category = $row['worker_category'];
                                 }
                             ?>
