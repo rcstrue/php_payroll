@@ -64,10 +64,19 @@ if ($selectedClient) {
 
 // Handle save
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_attendance'])) {
+    $debugOutput = [];
+    $debugOutput[] = "=== ATTENDANCE SAVE DEBUG ===";
+    $debugOutput[] = "POST method: " . $_SERVER['REQUEST_METHOD'];
+    $debugOutput[] = "save_attendance set: " . (isset($_POST['save_attendance']) ? 'YES' : 'NO');
+    $debugOutput[] = "POST keys: " . implode(', ', array_keys($_POST));
+    
     $unitId = (int)$_POST['unit_id'];
     $month = (int)$_POST['month'];
     $year = (int)$_POST['year'];
     $employeeIds = $_POST['employee_id'] ?? [];
+    
+    $debugOutput[] = "Unit ID: $unitId, Month: $month, Year: $year";
+    $debugOutput[] = "Employee IDs count: " . count($employeeIds);
     
     // Get client_id from unit
     $stmt = $db->prepare("SELECT client_id FROM units WHERE id = ?");
@@ -76,6 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_attendance'])) {
     $clientId = $unitData ? $unitData['client_id'] : 0;
     
     $savedCount = 0;
+    $errors = [];
     
     try {
         foreach ($employeeIds as $empId) {
@@ -83,6 +93,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_attendance'])) {
             $totalExtra = isset($_POST['total_extra'][$empId]) ? (float)$_POST['total_extra'][$empId] : 0;
             $otHours = isset($_POST['overtime_hours'][$empId]) ? (float)$_POST['overtime_hours'][$empId] : 0;
             $totalWO = isset($_POST['total_wo'][$empId]) ? (int)$_POST['total_wo'][$empId] : 0;
+            
+            $debugOutput[] = "Employee $empId: Present=$totalPresent, Extra=$totalExtra, OT=$otHours, WO=$totalWO";
             
             // Insert or update using ON DUPLICATE KEY
             $stmt = $db->prepare("
@@ -97,20 +109,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_attendance'])) {
                     source = 'Manual',
                     updated_at = CURRENT_TIMESTAMP
             ");
-            $stmt->execute([$empId, $unitId, $month, $year, $totalPresent, $totalExtra, $otHours, $totalWO]);
-            $savedCount++;
+            $result = $stmt->execute([$empId, $unitId, $month, $year, $totalPresent, $totalExtra, $otHours, $totalWO]);
+            $debugOutput[] = "Insert result for $empId: " . ($result ? 'SUCCESS' : 'FAILED');
+            if ($result) {
+                $savedCount++;
+            }
         }
         
-        setFlash('success', "Attendance saved successfully! {$savedCount} employees updated.");
+        $debugOutput[] = "Total saved: $savedCount";
+        
+        // Show debug and redirect
+        $_SESSION['attendance_debug'] = $debugOutput;
+        setFlash('success', "Attendance saved! {$savedCount} employees updated.");
         
         // Redirect to same page with filters
         header("Location: index.php?page=attendance/add&client_id={$clientId}&unit_id={$unitId}&month={$month}&year={$year}&load=1");
         exit;
         
     } catch (Exception $e) {
+        $debugOutput[] = "ERROR: " . $e->getMessage();
+        $_SESSION['attendance_debug'] = $debugOutput;
         setFlash('error', 'Error saving attendance: ' . $e->getMessage());
     }
 }
+
+// Show debug from previous save
+$debugInfo = isset($_SESSION['attendance_debug']) ? $_SESSION['attendance_debug'] : [];
+unset($_SESSION['attendance_debug']);
 
 // Get employees and their attendance when unit is selected
 $employees = [];
@@ -161,6 +186,21 @@ if ($selectedUnit && isset($_GET['load'])) {
 // Days in selected month
 $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $selectedMonth, $selectedYear);
 ?>
+
+<?php if (!empty($debugInfo)): ?>
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card border-warning">
+            <div class="card-header bg-warning text-dark">
+                <strong>Debug Information</strong>
+            </div>
+            <div class="card-body">
+                <pre style="font-size: 11px; margin: 0;"><?php echo implode("\n", $debugInfo); ?></pre>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <div class="row">
     <div class="col-12">
