@@ -62,9 +62,59 @@ if ($selectedClient) {
     }
 }
 
+// Handle save
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_attendance'])) {
+    $unitId = (int)$_POST['unit_id'];
+    $month = (int)$_POST['month'];
+    $year = (int)$_POST['year'];
+    $employeeIds = $_POST['employee_id'] ?? [];
+    
+    // Get client_id from unit
+    $stmt = $db->prepare("SELECT client_id FROM units WHERE id = ?");
+    $stmt->execute([$unitId]);
+    $unitData = $stmt->fetch(PDO::FETCH_ASSOC);
+    $clientId = $unitData ? $unitData['client_id'] : 0;
+    
+    $savedCount = 0;
+    
+    try {
+        foreach ($employeeIds as $empId) {
+            $totalPresent = isset($_POST['total_present'][$empId]) ? (float)$_POST['total_present'][$empId] : 0;
+            $totalExtra = isset($_POST['total_extra'][$empId]) ? (float)$_POST['total_extra'][$empId] : 0;
+            $otHours = isset($_POST['overtime_hours'][$empId]) ? (float)$_POST['overtime_hours'][$empId] : 0;
+            $totalWO = isset($_POST['total_wo'][$empId]) ? (int)$_POST['total_wo'][$empId] : 0;
+            
+            // Insert or update using ON DUPLICATE KEY
+            $stmt = $db->prepare("
+                INSERT INTO attendance_summary 
+                (employee_id, unit_id, month, year, total_present, total_extra, overtime_hours, total_wo, source)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Manual')
+                ON DUPLICATE KEY UPDATE 
+                    total_present = VALUES(total_present),
+                    total_extra = VALUES(total_extra),
+                    overtime_hours = VALUES(overtime_hours),
+                    total_wo = VALUES(total_wo),
+                    source = 'Manual',
+                    updated_at = CURRENT_TIMESTAMP
+            ");
+            $stmt->execute([$empId, $unitId, $month, $year, $totalPresent, $totalExtra, $otHours, $totalWO]);
+            $savedCount++;
+        }
+        
+        setFlash('success', "Attendance saved successfully! {$savedCount} employees updated.");
+        
+        // Redirect to same page with filters
+        header("Location: index.php?page=attendance/add&client_id={$clientId}&unit_id={$unitId}&month={$month}&year={$year}&load=1");
+        exit;
+        
+    } catch (Exception $e) {
+        setFlash('error', 'Error saving attendance: ' . $e->getMessage());
+    }
+}
+
 // Get employees and their attendance when unit is selected
 $employees = [];
-if ($selectedUnit && $_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['load'])) {
+if ($selectedUnit && isset($_GET['load'])) {
     // Get employees for this unit
     $stmt = $db->prepare("
         SELECT e.id, e.employee_code, e.full_name, e.designation, e.worker_category,
@@ -106,57 +156,6 @@ if ($selectedUnit && $_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['load']
         }
     }
     unset($emp);
-}
-
-// Handle save
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_attendance'])) {
-    $unitId = (int)$_POST['unit_id'];
-    $month = (int)$_POST['month'];
-    $year = (int)$_POST['year'];
-    $employeeIds = $_POST['employee_id'] ?? [];
-    
-    // Get client_id from unit
-    $stmt = $db->prepare("SELECT client_id FROM units WHERE id = ?");
-    $stmt->execute([$unitId]);
-    $unitData = $stmt->fetch(PDO::FETCH_ASSOC);
-    $clientId = $unitData ? $unitData['client_id'] : 0;
-    
-    $savedCount = 0;
-    $errors = [];
-    
-    try {
-        foreach ($employeeIds as $empId) {
-            $totalPresent = isset($_POST['total_present'][$empId]) ? (float)$_POST['total_present'][$empId] : 0;
-            $totalExtra = isset($_POST['total_extra'][$empId]) ? (float)$_POST['total_extra'][$empId] : 0;
-            $otHours = isset($_POST['overtime_hours'][$empId]) ? (float)$_POST['overtime_hours'][$empId] : 0;
-            $totalWO = isset($_POST['total_wo'][$empId]) ? (int)$_POST['total_wo'][$empId] : 0;
-            
-            // Insert or update using ON DUPLICATE KEY
-            $stmt = $db->prepare("
-                INSERT INTO attendance_summary 
-                (employee_id, unit_id, month, year, total_present, total_extra, overtime_hours, total_wo, source)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Manual')
-                ON DUPLICATE KEY UPDATE 
-                    total_present = VALUES(total_present),
-                    total_extra = VALUES(total_extra),
-                    overtime_hours = VALUES(overtime_hours),
-                    total_wo = VALUES(total_wo),
-                    source = 'Manual',
-                    updated_at = CURRENT_TIMESTAMP
-            ");
-            $stmt->execute([$empId, $unitId, $month, $year, $totalPresent, $totalExtra, $otHours, $totalWO]);
-            $savedCount++;
-        }
-        
-        setFlash('success', "Attendance saved successfully! {$savedCount} employees updated.");
-        
-        // Redirect to same page with filters
-        header("Location: index.php?page=attendance/add&client_id={$clientId}&unit_id={$unitId}&month={$month}&year={$year}&load=1");
-        exit;
-        
-    } catch (Exception $e) {
-        setFlash('error', 'Error saving attendance: ' . $e->getMessage());
-    }
 }
 
 // Days in selected month

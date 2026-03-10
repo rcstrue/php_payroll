@@ -62,52 +62,6 @@ if ($selectedClient) {
     }
 }
 
-// Get employees and their advances when unit is selected
-$employees = [];
-if ($selectedUnit && $_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['load'])) {
-    // Get employees for this unit
-    $stmt = $db->prepare("
-        SELECT e.id, e.employee_code, e.full_name, e.designation, e.worker_category,
-               ess.basic_wage, ess.gross_salary
-        FROM employees e
-        LEFT JOIN employee_salary_structures ess ON e.id = ess.employee_id AND ess.effective_to IS NULL
-        WHERE e.unit_id = ? AND e.status = 'approved'
-        ORDER BY e.employee_code
-    ");
-    $stmt->execute([$selectedUnit]);
-    $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Get existing advances if any
-    foreach ($employees as &$emp) {
-        try {
-            $stmt = $db->prepare("
-                SELECT adv1, adv2, office_advance, dress_advance
-                FROM employee_advances
-                WHERE employee_id = ? AND month = ? AND year = ?
-            ");
-            $stmt->execute([$emp['id'], $selectedMonth, $selectedYear]);
-            $existing = $stmt->fetch(PDO::FETCH_ASSOC);
-            if ($existing) {
-                $emp['adv1'] = $existing['adv1'];
-                $emp['adv2'] = $existing['adv2'];
-                $emp['office_advance'] = $existing['office_advance'];
-                $emp['dress_advance'] = $existing['dress_advance'];
-            } else {
-                $emp['adv1'] = '';
-                $emp['adv2'] = '';
-                $emp['office_advance'] = '';
-                $emp['dress_advance'] = '';
-            }
-        } catch (Exception $e) {
-            $emp['adv1'] = '';
-            $emp['adv2'] = '';
-            $emp['office_advance'] = '';
-            $emp['dress_advance'] = '';
-        }
-    }
-    unset($emp);
-}
-
 // Handle save
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_advance'])) {
     $unitId = (int)$_POST['unit_id'];
@@ -155,6 +109,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_advance'])) {
     } catch (Exception $e) {
         setFlash('error', 'Error saving advances: ' . $e->getMessage());
     }
+}
+
+// Get employees and their advances when unit is selected
+$employees = [];
+if ($selectedUnit && isset($_GET['load'])) {
+    // Get employees for this unit
+    $stmt = $db->prepare("
+        SELECT e.id, e.employee_code, e.full_name, e.designation, e.worker_category,
+               ess.basic_wage, ess.gross_salary
+        FROM employees e
+        LEFT JOIN employee_salary_structures ess ON e.id = ess.employee_id AND ess.effective_to IS NULL
+        WHERE e.unit_id = ? AND e.status = 'approved'
+        ORDER BY e.employee_code
+    ");
+    $stmt->execute([$selectedUnit]);
+    $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Get existing advances if any
+    foreach ($employees as &$emp) {
+        try {
+            $stmt = $db->prepare("
+                SELECT adv1, adv2, office_advance, dress_advance
+                FROM employee_advances
+                WHERE employee_id = ? AND month = ? AND year = ?
+            ");
+            $stmt->execute([$emp['id'], $selectedMonth, $selectedYear]);
+            $existing = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($existing) {
+                $emp['adv1'] = $existing['adv1'];
+                $emp['adv2'] = $existing['adv2'];
+                $emp['office_advance'] = $existing['office_advance'];
+                $emp['dress_advance'] = $existing['dress_advance'];
+            } else {
+                $emp['adv1'] = '';
+                $emp['adv2'] = '';
+                $emp['office_advance'] = '';
+                $emp['dress_advance'] = '';
+            }
+        } catch (Exception $e) {
+            $emp['adv1'] = '';
+            $emp['adv2'] = '';
+            $emp['office_advance'] = '';
+            $emp['dress_advance'] = '';
+        }
+    }
+    unset($emp);
 }
 ?>
 
