@@ -15,6 +15,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Write build timestamp
+        run: echo $(date '+%Y-%m-%d %H:%M:%S') > build_time.txt
+
       - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@4.3.0
         with:
