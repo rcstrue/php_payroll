@@ -55,23 +55,33 @@ try {
         $columns = $db->query("SHOW COLUMNS FROM attendance_summary")->fetchAll(PDO::FETCH_COLUMN);
         
         if (!in_array('total_present', $columns)) {
-            $db->exec("ALTER TABLE attendance_summary ADD COLUMN total_present decimal(5,2) DEFAULT 0.00 AFTER year");
+            try {
+                $db->exec("ALTER TABLE attendance_summary ADD COLUMN total_present decimal(5,2) DEFAULT 0.00 AFTER year");
+            } catch (Exception $e) { error_log("Failed to add total_present: " . $e->getMessage()); }
         }
         if (!in_array('total_extra', $columns)) {
-            $db->exec("ALTER TABLE attendance_summary ADD COLUMN total_extra decimal(5,2) DEFAULT 0.00 AFTER total_present");
+            try {
+                $db->exec("ALTER TABLE attendance_summary ADD COLUMN total_extra decimal(5,2) DEFAULT 0.00 AFTER total_present");
+            } catch (Exception $e) { error_log("Failed to add total_extra: " . $e->getMessage()); }
         }
         if (!in_array('overtime_hours', $columns)) {
-            $db->exec("ALTER TABLE attendance_summary ADD COLUMN overtime_hours decimal(6,2) DEFAULT 0.00 AFTER total_extra");
+            try {
+                $db->exec("ALTER TABLE attendance_summary ADD COLUMN overtime_hours decimal(6,2) DEFAULT 0.00 AFTER total_extra");
+            } catch (Exception $e) { error_log("Failed to add overtime_hours: " . $e->getMessage()); }
         }
         if (!in_array('total_wo', $columns)) {
-            $db->exec("ALTER TABLE attendance_summary ADD COLUMN total_wo int(3) DEFAULT 0 AFTER overtime_hours");
+            try {
+                $db->exec("ALTER TABLE attendance_summary ADD COLUMN total_wo int(3) DEFAULT 0 AFTER overtime_hours");
+            } catch (Exception $e) { error_log("Failed to add total_wo: " . $e->getMessage()); }
         }
         if (!in_array('source', $columns)) {
-            $db->exec("ALTER TABLE attendance_summary ADD COLUMN source enum('Manual','Excel Upload') DEFAULT 'Manual' AFTER total_wo");
+            try {
+                $db->exec("ALTER TABLE attendance_summary ADD COLUMN source enum('Manual','Excel Upload') DEFAULT 'Manual' AFTER total_wo");
+            } catch (Exception $e) { error_log("Failed to add source: " . $e->getMessage()); }
         }
     }
 } catch (Exception $e) {
-    // Table creation/modification failed
+    error_log("Table check/creation failed: " . $e->getMessage());
 }
 
 // Get units based on selected client
@@ -90,17 +100,14 @@ if ($selectedClient) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_attendance'])) {
     $debugOutput = [];
     $debugOutput[] = "=== ATTENDANCE SAVE DEBUG ===";
-    $debugOutput[] = "POST method: " . $_SERVER['REQUEST_METHOD'];
-    $debugOutput[] = "save_attendance set: " . (isset($_POST['save_attendance']) ? 'YES' : 'NO');
-    $debugOutput[] = "POST keys: " . implode(', ', array_keys($_POST));
     
     $unitId = (int)$_POST['unit_id'];
     $month = (int)$_POST['month'];
     $year = (int)$_POST['year'];
-    $employeeIds = $_POST['employee_id'] ?? [];
+    $employeeCodes = $_POST['employee_code'] ?? [];
     
     $debugOutput[] = "Unit ID: $unitId, Month: $month, Year: $year";
-    $debugOutput[] = "Employee IDs count: " . count($employeeIds);
+    $debugOutput[] = "Employee Codes count: " . count($employeeCodes);
     
     // Get client_id from unit
     $stmt = $db->prepare("SELECT client_id FROM units WHERE id = ?");
@@ -109,18 +116,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_attendance'])) {
     $clientId = $unitData ? $unitData['client_id'] : 0;
     
     $savedCount = 0;
-    $errors = [];
     
     try {
-        foreach ($employeeIds as $empId) {
-            $totalPresent = isset($_POST['total_present'][$empId]) ? (float)$_POST['total_present'][$empId] : 0;
-            $totalExtra = isset($_POST['total_extra'][$empId]) ? (float)$_POST['total_extra'][$empId] : 0;
-            $otHours = isset($_POST['overtime_hours'][$empId]) ? (float)$_POST['overtime_hours'][$empId] : 0;
-            $totalWO = isset($_POST['total_wo'][$empId]) ? (int)$_POST['total_wo'][$empId] : 0;
+        foreach ($employeeCodes as $empCode) {
+            $totalPresent = isset($_POST['total_present'][$empCode]) ? (float)$_POST['total_present'][$empCode] : 0;
+            $totalExtra = isset($_POST['total_extra'][$empCode]) ? (float)$_POST['total_extra'][$empCode] : 0;
+            $otHours = isset($_POST['overtime_hours'][$empCode]) ? (float)$_POST['overtime_hours'][$empCode] : 0;
+            $totalWO = isset($_POST['total_wo'][$empCode]) ? (int)$_POST['total_wo'][$empCode] : 0;
             
-            $debugOutput[] = "Employee $empId: Present=$totalPresent, Extra=$totalExtra, OT=$otHours, WO=$totalWO";
+            $debugOutput[] = "Employee Code $empCode: Present=$totalPresent, Extra=$totalExtra, OT=$otHours, WO=$totalWO";
             
             // Insert or update using ON DUPLICATE KEY
+            // Note: employee_id in attendance_summary is INT (matches employee_code)
             $stmt = $db->prepare("
                 INSERT INTO attendance_summary 
                 (employee_id, unit_id, month, year, total_present, total_extra, overtime_hours, total_wo, source)
@@ -133,8 +140,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_attendance'])) {
                     source = 'Manual',
                     updated_at = CURRENT_TIMESTAMP
             ");
-            $result = $stmt->execute([$empId, $unitId, $month, $year, $totalPresent, $totalExtra, $otHours, $totalWO]);
-            $debugOutput[] = "Insert result for $empId: " . ($result ? 'SUCCESS' : 'FAILED');
+            $result = $stmt->execute([$empCode, $unitId, $month, $year, $totalPresent, $totalExtra, $otHours, $totalWO]);
+            $debugOutput[] = "Insert result for $empCode: " . ($result ? 'SUCCESS' : 'FAILED');
             if ($result) {
                 $savedCount++;
             }
@@ -142,11 +149,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_attendance'])) {
         
         $debugOutput[] = "Total saved: $savedCount";
         
-        // Show debug and redirect
         $_SESSION['attendance_debug'] = $debugOutput;
         setFlash('success', "Attendance saved! {$savedCount} employees updated.");
         
-        // Redirect to same page with filters
         header("Location: index.php?page=attendance/add&client_id={$clientId}&unit_id={$unitId}&month={$month}&year={$year}&load=1");
         exit;
         
@@ -160,6 +165,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_attendance'])) {
 // Show debug from previous save
 $debugInfo = isset($_SESSION['attendance_debug']) ? $_SESSION['attendance_debug'] : [];
 unset($_SESSION['attendance_debug']);
+
+// Show table columns for debugging
+$tableColumns = [];
+try {
+    $checkTable = $db->query("SHOW TABLES LIKE 'attendance_summary'");
+    if ($checkTable->rowCount() > 0) {
+        $tableColumns = $db->query("SHOW COLUMNS FROM attendance_summary")->fetchAll(PDO::FETCH_COLUMN);
+    }
+} catch (Exception $e) {
+    // ignore
+}
 
 // Get employees and their attendance when unit is selected
 $employees = [];
@@ -177,14 +193,15 @@ if ($selectedUnit && isset($_GET['load'])) {
     $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     // Get existing attendance summary if any
+    // Note: attendance_summary.employee_id is INT matching employee_code
     foreach ($employees as &$emp) {
         try {
             $stmt = $db->prepare("
                 SELECT total_present, total_extra, overtime_hours, total_wo
                 FROM attendance_summary
-                WHERE employee_id = ? AND month = ? AND year = ?
+                WHERE employee_id = ? AND unit_id = ? AND month = ? AND year = ?
             ");
-            $stmt->execute([$emp['id'], $selectedMonth, $selectedYear]);
+            $stmt->execute([$emp['employee_code'], $selectedUnit, $selectedMonth, $selectedYear]);
             $existing = $stmt->fetch(PDO::FETCH_ASSOC);
             if ($existing) {
                 $emp['total_present'] = $existing['total_present'];
@@ -220,6 +237,10 @@ $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $selectedMonth, $selectedYear);
             </div>
             <div class="card-body">
                 <pre style="font-size: 11px; margin: 0;"><?php echo implode("\n", $debugInfo); ?></pre>
+                <?php if (!empty($tableColumns)): ?>
+                <hr>
+                <strong>Table columns:</strong> <?php echo implode(', ', $tableColumns); ?>
+                <?php endif; ?>
             </div>
         </div>
     </div>
@@ -349,32 +370,32 @@ $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $selectedMonth, $selectedYear);
                                 <tr>
                                     <td class="text-center"><?php echo $sr++; ?></td>
                                     <td>
-                                        <input type="hidden" name="employee_id[]" value="<?php echo $emp['id']; ?>">
+                                        <input type="hidden" name="employee_code[]" value="<?php echo $emp['employee_code']; ?>">
                                         <code><?php echo $emp['employee_code']; ?></code>
                                     </td>
                                     <td><?php echo sanitize($emp['full_name']); ?></td>
                                     <td><?php echo sanitize($emp['designation']); ?></td>
                                     <td><span class="badge bg-light text-dark"><?php echo sanitize($emp['worker_category']); ?></span></td>
                                     <td>
-                                        <input type="number" name="total_present[<?php echo $emp['id']; ?>]" 
+                                        <input type="number" name="total_present[<?php echo $emp['employee_code']; ?>]" 
                                                value="<?php echo $emp['total_present']; ?>" 
                                                class="form-control form-control-sm text-center" 
                                                min="0" max="31" step="0.5">
                                     </td>
                                     <td>
-                                        <input type="number" name="total_extra[<?php echo $emp['id']; ?>]" 
+                                        <input type="number" name="total_extra[<?php echo $emp['employee_code']; ?>]" 
                                                value="<?php echo $emp['total_extra']; ?>" 
                                                class="form-control form-control-sm text-center" 
                                                min="0" max="31" step="0.5">
                                     </td>
                                     <td>
-                                        <input type="number" name="overtime_hours[<?php echo $emp['id']; ?>]" 
+                                        <input type="number" name="overtime_hours[<?php echo $emp['employee_code']; ?>]" 
                                                value="<?php echo $emp['overtime_hours']; ?>" 
                                                class="form-control form-control-sm text-center" 
                                                min="0" max="300" step="0.5">
                                     </td>
                                     <td>
-                                        <input type="number" name="total_wo[<?php echo $emp['id']; ?>]" 
+                                        <input type="number" name="total_wo[<?php echo $emp['employee_code']; ?>]" 
                                                value="<?php echo $emp['total_wo']; ?>" 
                                                class="form-control form-control-sm text-center" 
                                                min="0" max="8">
