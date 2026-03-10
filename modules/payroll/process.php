@@ -541,8 +541,10 @@ if (isset($_GET['export']) && !empty($payrollData)) {
                     <span class="badge bg-info"><?php echo date('F Y', mktime(0, 0, 0, $selectedMonth, 1, $selectedYear)); ?></span>
                     <span class="badge bg-secondary ms-2">Days: <?php echo $daysInMonth; ?></span>
                     <span class="badge bg-primary ms-2"><?php echo $totals['employees']; ?> Employees</span>
-                    <?php if ($payrollPeriod): ?>
+                    <?php if ($payrollPeriod && is_array($payrollPeriod) && isset($payrollPeriod['status'])): ?>
                     <span class="badge bg-success ms-2"><?php echo $payrollPeriod['status']; ?></span>
+                    <?php elseif ($payrollPeriod === true): ?>
+                    <span class="badge bg-success ms-2">Processed</span>
                     <?php else: ?>
                     <span class="badge bg-warning ms-2">Preview</span>
                     <?php endif; ?>
