@@ -683,7 +683,7 @@ if (isset($_GET['export']) && !empty($payrollData)) {
                             <tr class="<?php echo !$hasSalary && !$payrollPeriod ? 'table-warning' : ''; ?>">
                                 <td class="text-center"><?php echo $sr++; ?></td>
                                 <td>
-                                    <a href="index.php?page=salary/edit&employee_id=<?php echo $row['emp_uuid'] ?? $row['id'] ?? ''; ?>" class="text-decoration-none">
+                                    <a href="index.php?page=employee/add&id=<?php echo $row['emp_uuid'] ?? $row['id'] ?? ''; ?>" class="text-decoration-none">
                                         <code><?php echo sanitize($empCode); ?></code>
                                         <?php if (!$hasSalary && !$payrollPeriod): ?>
                                         <i class="bi bi-exclamation-triangle text-warning" title="No Salary Structure"></i>

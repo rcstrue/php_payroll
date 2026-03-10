@@ -86,11 +86,17 @@ try {
     $clients = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) {}
 
-// Get selected filters - default to current month
+// Get selected filters - default to previous month
+$previousMonth = date('n') - 1;
+$previousYear = date('Y');
+if ($previousMonth < 1) {
+    $previousMonth = 12;
+    $previousYear--;
+}
 $selectedClient = isset($_GET['client_id']) ? (int)$_GET['client_id'] : null;
 $selectedUnit = isset($_GET['unit_id']) ? (int)$_GET['unit_id'] : null;
-$selectedMonth = isset($_GET['month']) ? (int)$_GET['month'] : date('n');
-$selectedYear = isset($_GET['year']) ? (int)$_GET['year'] : date('Y');
+$selectedMonth = isset($_GET['month']) ? (int)$_GET['month'] : $previousMonth;
+$selectedYear = isset($_GET['year']) ? (int)$_GET['year'] : $previousYear;
 
 // Get units based on selected client
 $units = [];

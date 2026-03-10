@@ -116,11 +116,21 @@ include dirname(__FILE__) . '/templates/header.php';
 
 // Include page content
 $pageFile = dirname(__FILE__) . "/modules/{$page}.php";
+$moduleIndexFile = dirname(__FILE__) . "/modules/{$page}/index.php";
+
 if (file_exists($pageFile)) {
     include $pageFile;
+} elseif (file_exists($moduleIndexFile)) {
+    include $moduleIndexFile;
 } else {
-    // Default to dashboard if page not found
-    include dirname(__FILE__) . '/modules/dashboard/index.php';
+    // Show 404 error page
+    http_response_code(404);
+    $errorFile = dirname(__FILE__) . '/modules/errors/404.php';
+    if (file_exists($errorFile)) {
+        include $errorFile;
+    } else {
+        echo '<div class="container mt-5"><div class="alert alert-danger"><h4>404 - Page Not Found</h4><p>The requested page could not be found.</p></div></div>';
+    }
 }
 
 // Include footer template

@@ -353,6 +353,15 @@ $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $selectedMonth, $selectedYear);
                                 </tr>
                                 <?php endforeach; ?>
                             </tbody>
+                            <tfoot class="table-light fw-bold">
+                                <tr>
+                                    <td colspan="3" class="text-end">TOTAL (<?php echo count($employees); ?> Employees)</td>
+                                    <td class="text-center" id="total-present">0</td>
+                                    <td class="text-center" id="total-extra">0</td>
+                                    <td class="text-center" id="total-ot">0</td>
+                                    <td class="text-center" id="total-wo">0</td>
+                                </tr>
+                            </tfoot>
                         </table>
                     </div>
                     
@@ -408,6 +417,37 @@ document.getElementById('clientSelect').addEventListener('change', function() {
             unitSelect.innerHTML = '<option value="">Select Unit</option>';
         });
 });
+
+// Calculate totals
+function calculateTotals() {
+    let totalPresent = 0, totalExtra = 0, totalOT = 0, totalWO = 0;
+    
+    document.querySelectorAll('[name^="total_present["]').forEach(input => {
+        totalPresent += parseFloat(input.value) || 0;
+    });
+    document.querySelectorAll('[name^="total_extra["]').forEach(input => {
+        totalExtra += parseFloat(input.value) || 0;
+    });
+    document.querySelectorAll('[name^="overtime_hours["]').forEach(input => {
+        totalOT += parseFloat(input.value) || 0;
+    });
+    document.querySelectorAll('[name^="total_wo["]').forEach(input => {
+        totalWO += parseFloat(input.value) || 0;
+    });
+    
+    document.getElementById('total-present').textContent = totalPresent.toFixed(0);
+    document.getElementById('total-extra').textContent = totalExtra.toFixed(0);
+    document.getElementById('total-ot').textContent = totalOT.toFixed(0);
+    document.getElementById('total-wo').textContent = totalWO.toFixed(0);
+}
+
+// Add event listeners to all inputs
+document.querySelectorAll('input[type="number"]').forEach(input => {
+    input.addEventListener('input', calculateTotals);
+});
+
+// Initial calculation on page load
+document.addEventListener('DOMContentLoaded', calculateTotals);
 </script>
 JS;
 ?>
