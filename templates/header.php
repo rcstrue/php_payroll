@@ -123,6 +123,16 @@
                 </li>
                 <?php endif; ?>
                 
+                <!-- Salary Structures -->
+                <?php if (in_array($_SESSION['role_code'], ['admin', 'hr_executive', 'manager'])): ?>
+                <li class="sidebar-item">
+                    <a href="index.php?page=salary/index" class="sidebar-link <?php echo $page == 'salary/index' ? 'active' : ''; ?>">
+                        <i class="bi bi-currency-rupee"></i>
+                        <span>Salary Structures</span>
+                    </a>
+                </li>
+                <?php endif; ?>
+                
                 <!-- Payroll -->
                 <?php if (in_array($_SESSION['role_code'], ['admin', 'hr_executive', 'manager'])): ?>
                 <li class="sidebar-item has-submenu <?php echo strpos($page, 'payroll') === 0 ? 'open' : ''; ?>">

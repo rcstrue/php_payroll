@@ -274,7 +274,7 @@ if ($selectedUnit && isset($_GET['load'])) {
     try {
         // First check if processed payroll records exist for this unit/month/year
         $processedStmt = $db->prepare("
-            SELECT p.*, e.employee_code, e.full_name, e.worker_category, e.designation,
+            SELECT p.*, e.id as emp_uuid, e.employee_code, e.full_name, e.worker_category, e.designation,
                    att.total_present, att.overtime_hours,
                    adv.adv1, adv.adv2, adv.office_advance, adv.dress_advance,
                    pp.status as period_status
@@ -337,13 +337,9 @@ if ($selectedUnit && isset($_GET['load'])) {
             $payrollData = $stmt->fetchAll(PDO::FETCH_ASSOC);
             $payrollPeriod = null; // Mark as preview
             
-            // Calculate preview totals
+            // Calculate preview totals - show ALL employees even without salary
             foreach ($payrollData as $row) {
-                // Skip if no salary structure
-                if (empty($row['basic_wage']) && empty($row['gross_salary'])) {
-                    continue;
-                }
-                
+                // Calculate even with 0 salary
                 $calc = calculatePayroll($row, $daysInMonth);
                 $totals['employees']++;
                 $totals['present'] += $calc['paid_days'];
@@ -657,11 +653,9 @@ if (isset($_GET['export']) && !empty($payrollData)) {
                                     $empCode = $row['employee_code'];
                                     $empName = $row['full_name'];
                                     $category = $row['worker_category'];
+                                    $hasSalary = true; // Already processed means has salary
                                 } else {
-                                    // Preview data - skip if no salary
-                                    if (empty($row['basic_wage']) && empty($row['gross_salary'])) {
-                                        continue;
-                                    }
+                                    // Preview data - show ALL employees even with 0 salary
                                     $calc = calculatePayroll($row, $daysInMonth);
                                     $paidDays = $calc['paid_days'];
                                     $basic = $calc['basic'];
@@ -683,11 +677,19 @@ if (isset($_GET['export']) && !empty($payrollData)) {
                                     $empCode = $row['employee_code'];
                                     $empName = $row['full_name'];
                                     $category = $row['worker_category'];
+                                    $hasSalary = !empty($row['basic_wage']) || !empty($row['gross_salary']);
                                 }
                             ?>
-                            <tr>
+                            <tr class="<?php echo !$hasSalary && !$payrollPeriod ? 'table-warning' : ''; ?>">
                                 <td class="text-center"><?php echo $sr++; ?></td>
-                                <td><code><?php echo sanitize($empCode); ?></code></td>
+                                <td>
+                                    <a href="index.php?page=salary/edit&employee_id=<?php echo $row['emp_uuid'] ?? $row['id'] ?? ''; ?>" class="text-decoration-none">
+                                        <code><?php echo sanitize($empCode); ?></code>
+                                        <?php if (!$hasSalary && !$payrollPeriod): ?>
+                                        <i class="bi bi-exclamation-triangle text-warning" title="No Salary Structure"></i>
+                                        <?php endif; ?>
+                                    </a>
+                                </td>
                                 <td><?php echo sanitize($empName); ?></td>
                                 <td><small><?php echo sanitize($category); ?></small></td>
                                 <td class="text-center"><?php echo $paidDays; ?></td>

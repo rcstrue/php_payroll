@@ -287,7 +287,7 @@ class Employee {
             $employeeId = $this->db->insert('employees', $dbData);
             
             // Insert salary structure if provided and table exists
-            if ($useSalaryTable && (!empty($data['basic_wage']) || !empty($data['basic_salary']))) {
+            if ($useSalaryTable) {
                 $salaryData = [
                     'employee_id' => $data['id'],
                     'effective_from' => $data['date_of_joining'] ?? date('Y-m-d'),
@@ -299,13 +299,13 @@ class Employee {
                     'special_allowance' => floatval($data['special_allowance'] ?? 0),
                     'other_allowance' => floatval($data['other_allowance'] ?? 0),
                     'gross_salary' => floatval($data['gross_salary'] ?? 0),
-                    'pf_applicable' => isset($data['pf_applicable']) ? 1 : 1,
-                    'esi_applicable' => isset($data['esi_applicable']) ? 1 : 1,
-                    'pt_applicable' => isset($data['pt_applicable']) ? 1 : 1,
-                    'lwf_applicable' => isset($data['lwf_applicable']) ? 1 : 1,
-                    'bonus_applicable' => isset($data['bonus_applicable']) ? 1 : 1,
-                    'gratuity_applicable' => isset($data['gratuity_applicable']) ? 1 : 1,
-                    'overtime_applicable' => isset($data['overtime_applicable']) ? 1 : 0,
+                    'pf_applicable' => !empty($data['pf_applicable']) ? 1 : 0,
+                    'esi_applicable' => !empty($data['esi_applicable']) ? 1 : 0,
+                    'pt_applicable' => !empty($data['pt_applicable']) ? 1 : 0,
+                    'lwf_applicable' => !empty($data['lwf_applicable']) ? 1 : 0,
+                    'bonus_applicable' => !empty($data['bonus_applicable']) ? 1 : 0,
+                    'gratuity_applicable' => !empty($data['gratuity_applicable']) ? 1 : 0,
+                    'overtime_applicable' => !empty($data['overtime_applicable']) ? 1 : 0,
                 ];
                 $this->db->insert('employee_salary_structures', $salaryData);
             }
@@ -393,9 +393,9 @@ class Employee {
         // Check if employee_salary_structures table exists
         $useSalaryTable = $this->checkSalaryTableExists();
 
-        // Extract salary data
+        // Extract salary data - always update PF/ESI flags even if salary not provided
         $salaryData = [];
-        if ($useSalaryTable && (isset($data['basic_wage']) || isset($data['basic_salary']))) {
+        if ($useSalaryTable && (isset($data['basic_wage']) || isset($data['pf_applicable']) || isset($data['esi_applicable']))) {
             $salaryData = [
                 'basic_wage' => floatval($data['basic_wage'] ?? $data['basic_salary'] ?? 0),
                 'da' => floatval($data['da'] ?? 0),
@@ -405,10 +405,10 @@ class Employee {
                 'special_allowance' => floatval($data['special_allowance'] ?? 0),
                 'other_allowance' => floatval($data['other_allowance'] ?? 0),
                 'gross_salary' => floatval($data['gross_salary'] ?? 0),
-                'pf_applicable' => isset($data['pf_applicable']) ? 1 : 1,
-                'esi_applicable' => isset($data['esi_applicable']) ? 1 : 1,
-                'pt_applicable' => isset($data['pt_applicable']) ? 1 : 1,
-                'lwf_applicable' => isset($data['lwf_applicable']) ? 1 : 1,
+                'pf_applicable' => !empty($data['pf_applicable']) ? 1 : 0,
+                'esi_applicable' => !empty($data['esi_applicable']) ? 1 : 0,
+                'pt_applicable' => !empty($data['pt_applicable']) ? 1 : 0,
+                'lwf_applicable' => !empty($data['lwf_applicable']) ? 1 : 0,
             ];
         }
 
