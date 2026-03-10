@@ -1,146 +1,102 @@
 <?php
 /**
- * RCS HRMS Pro - Attendance View
+ * RCS HRMS Pro - View Attendance Summary
+ * Shows attendance_summary data like Add Attendance page
  */
 
-$pageTitle = 'Attendance';
+$pageTitle = 'View Attendance';
 
-// Get filters
-$clientFilter = isset($_GET['client']) ? sanitize($_GET['client']) : '';
-$unitFilter = isset($_GET['unit']) ? sanitize($_GET['unit']) : '';
-$monthFilter = isset($_GET['month']) ? (int)$_GET['month'] : (int)date('m');
-$yearFilter = isset($_GET['year']) ? (int)$_GET['year'] : (int)date('Y');
-$statusFilter = isset($_GET['status']) ? sanitize($_GET['status']) : '';
+// Get clients
+$clients = [];
+try {
+    $stmt = $db->query("SELECT id, name, client_code FROM clients WHERE is_active = 1 ORDER BY name");
+    $clients = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    // Table doesn't exist
+}
 
-// Get clients for dropdown
-$clients = $client->getList();
+// Get selected filters - default to previous month
+$previousMonth = date('n') - 1;
+$previousYear = date('Y');
+if ($previousMonth < 1) {
+    $previousMonth = 12;
+    $previousYear--;
+}
+$selectedClient = isset($_GET['client_id']) ? (int)$_GET['client_id'] : null;
+$selectedUnit = isset($_GET['unit_id']) ? (int)$_GET['unit_id'] : null;
+$selectedMonth = isset($_GET['month']) ? (int)$_GET['month'] : $previousMonth;
+$selectedYear = isset($_GET['year']) ? (int)$_GET['year'] : $previousYear;
 
 // Get units based on selected client
 $units = [];
-if ($clientFilter) {
-    // Find client by name
-    $clientData = $db->prepare("SELECT id FROM clients WHERE name = ?");
-    $clientData->execute([$clientFilter]);
-    $clientRow = $clientData->fetch(PDO::FETCH_ASSOC);
-    if ($clientRow) {
-        $units = $unit->getByClient($clientRow['id']);
+if ($selectedClient) {
+    try {
+        $stmt = $db->prepare("SELECT id, name, unit_code FROM units WHERE client_id = ? AND is_active = 1 ORDER BY name");
+        $stmt->execute([$selectedClient]);
+        $units = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Exception $e) {
+        // Table doesn't exist
     }
 }
 
-// Build attendance query
-$where = ["MONTH(a.attendance_date) = :month", "YEAR(a.attendance_date) = :year"];
-$params = [':month' => $monthFilter, ':year' => $yearFilter];
-
-if (!empty($clientFilter)) {
-    $where[] = "e.client_name = :client";
-    $params[':client'] = $clientFilter;
+// Get attendance summary data when unit is selected
+$attendanceData = [];
+$totals = ['employees' => 0, 'present' => 0, 'extra' => 0, 'ot_hours' => 0, 'wo' => 0];
+if ($selectedUnit && isset($_GET['load'])) {
+    try {
+        // Get attendance summary with employee details
+        $stmt = $db->prepare("
+            SELECT e.employee_code, e.full_name, e.designation, e.worker_category,
+                   COALESCE(c.name, e.client_name) as client_name_display,
+                   COALESCE(u.name, e.unit_name) as unit_name_display,
+                   ess.basic_wage, ess.gross_salary,
+                   att.total_present, att.total_extra, att.overtime_hours, att.total_wo, att.source
+            FROM employees e
+            LEFT JOIN clients c ON e.client_id = c.id
+            LEFT JOIN units u ON e.unit_id = u.id
+            LEFT JOIN employee_salary_structures ess ON e.id = ess.employee_id AND ess.effective_to IS NULL
+            LEFT JOIN attendance_summary att ON att.employee_id = e.employee_code 
+                AND att.unit_id = ? AND att.month = ? AND att.year = ?
+            WHERE e.unit_id = ? AND e.status = 'approved'
+            ORDER BY e.employee_code
+        ");
+        $stmt->execute([$selectedUnit, $selectedMonth, $selectedYear, $selectedUnit]);
+        $attendanceData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Calculate totals
+        foreach ($attendanceData as $row) {
+            $totals['employees']++;
+            $totals['present'] += floatval($row['total_present'] ?? 0);
+            $totals['extra'] += floatval($row['total_extra'] ?? 0);
+            $totals['ot_hours'] += floatval($row['overtime_hours'] ?? 0);
+            $totals['wo'] += intval($row['total_wo'] ?? 0);
+        }
+    } catch (Exception $e) {
+        error_log("Error fetching attendance: " . $e->getMessage());
+    }
 }
 
-if (!empty($unitFilter)) {
-    $where[] = "e.unit_name = :unit";
-    $params[':unit'] = $unitFilter;
-}
-
-if (!empty($statusFilter)) {
-    $where[] = "a.status = :status";
-    $params[':status'] = $statusFilter;
-}
-
-$whereClause = implode(' AND ', $where);
-
-// Get attendance records with pagination
-$page = isset($_GET['pg']) ? max(1, (int)$_GET['pg']) : 1;
-$perPage = 50;
-$offset = ($page - 1) * $perPage;
-
-// Count total
-$countSql = "SELECT COUNT(*) as total FROM attendance a 
-             LEFT JOIN employees e ON a.employee_id = e.employee_code 
-             WHERE $whereClause";
-$countStmt = $db->prepare($countSql);
-$countStmt->execute(array_filter($params, fn($k) => $k !== ':limit' && $k !== ':offset', ARRAY_FILTER_USE_KEY));
-$total = $countStmt->fetch(PDO::FETCH_ASSOC)['total'];
-
-// Get attendance data
-$sql = "SELECT a.*, 
-               e.full_name, e.employee_code, e.client_name, e.unit_name, e.designation
-        FROM attendance a 
-        LEFT JOIN employees e ON a.employee_id = e.employee_code 
-        WHERE $whereClause 
-        ORDER BY e.unit_name, e.full_name 
-        LIMIT $perPage OFFSET $offset";
-
-$stmt = $db->prepare($sql);
-$stmt->execute(array_filter($params, fn($k) => $k !== ':limit' && $k !== ':offset', ARRAY_FILTER_USE_KEY));
-$attendance = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-// Calculate summary
-$summarySql = "SELECT 
-               COUNT(*) as total_records,
-               SUM(CASE WHEN a.status = 'Present' THEN 1 ELSE 0 END) as present,
-               SUM(CASE WHEN a.status = 'Absent' THEN 1 ELSE 0 END) as absent,
-               SUM(CASE WHEN a.status = 'Weekly Off' THEN 1 ELSE 0 END) as weekly_off,
-               SUM(CASE WHEN a.status = 'Holiday' THEN 1 ELSE 0 END) as holiday,
-               SUM(CASE WHEN a.status LIKE '%Leave%' THEN 1 ELSE 0 END) as leaves,
-               SUM(a.overtime_hours) as total_overtime
-               FROM attendance a 
-               LEFT JOIN employees e ON a.employee_id = e.employee_code 
-               WHERE $whereClause";
-
-$summaryStmt = $db->prepare($summarySql);
-$summaryStmt->execute(array_filter($params, fn($k) => $k !== ':limit' && $k !== ':offset', ARRAY_FILTER_USE_KEY));
-$summary = $summaryStmt->fetch(PDO::FETCH_ASSOC);
-
-// Month names for dropdown
-$months = [
-    1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April',
-    5 => 'May', 6 => 'June', 7 => 'July', 8 => 'August',
-    9 => 'September', 10 => 'October', 11 => 'November', 12 => 'December'
-];
-
-// Status options
-$statuses = ['Present', 'Absent', 'Weekly Off', 'Holiday', 'Paid Leave', 'Unpaid Leave', 'Sick Leave', 'Casual Leave', 'Half Day'];
+// Days in selected month
+$daysInMonth = cal_days_in_month(CAL_GREGORIAN, $selectedMonth, $selectedYear);
 ?>
 
 <div class="row">
     <div class="col-12">
         <div class="card">
             <div class="card-header">
-                <h5 class="card-title mb-0"><i class="bi bi-calendar-check me-2"></i>Attendance Records</h5>
+                <h5 class="card-title mb-0"><i class="bi bi-calendar-check me-2"></i>View Attendance</h5>
             </div>
             <div class="card-body">
-                <!-- Filters -->
-                <form method="GET" class="row g-2 mb-4">
+                <!-- Filters Form -->
+                <form method="GET" class="row g-3 mb-4" id="filterForm">
                     <input type="hidden" name="page" value="attendance/view">
                     
-                    <div class="col-md-2">
-                        <label class="form-label small">Month</label>
-                        <select class="form-select form-select-sm" name="month">
-                            <?php foreach ($months as $num => $name): ?>
-                            <option value="<?php echo $num; ?>" <?php echo $monthFilter == $num ? 'selected' : ''; ?>>
-                                <?php echo $name; ?>
-                            </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    
-                    <div class="col-md-2">
-                        <label class="form-label small">Year</label>
-                        <select class="form-select form-select-sm" name="year">
-                            <?php for ($y = date('Y'); $y >= date('Y') - 2; $y--): ?>
-                            <option value="<?php echo $y; ?>" <?php echo $yearFilter == $y ? 'selected' : ''; ?>>
-                                <?php echo $y; ?>
-                            </option>
-                            <?php endfor; ?>
-                        </select>
-                    </div>
-                    
                     <div class="col-md-3">
-                        <label class="form-label small">Client</label>
-                        <select class="form-select form-select-sm" name="client" id="clientFilter">
-                            <option value="">All Clients</option>
+                        <label class="form-label">Client</label>
+                        <select class="form-select" name="client_id" id="clientSelect" required>
+                            <option value="">Select Client</option>
                             <?php foreach ($clients as $c): ?>
-                            <option value="<?php echo sanitize($c['name']); ?>" <?php echo $clientFilter == $c['name'] ? 'selected' : ''; ?>>
+                            <option value="<?php echo $c['id']; ?>" <?php echo $selectedClient == $c['id'] ? 'selected' : ''; ?>>
                                 <?php echo sanitize($c['name']); ?>
                             </option>
                             <?php endforeach; ?>
@@ -148,11 +104,11 @@ $statuses = ['Present', 'Absent', 'Weekly Off', 'Holiday', 'Paid Leave', 'Unpaid
                     </div>
                     
                     <div class="col-md-3">
-                        <label class="form-label small">Unit</label>
-                        <select class="form-select form-select-sm" name="unit" id="unitFilter">
-                            <option value="">All Units</option>
+                        <label class="form-label">Unit</label>
+                        <select class="form-select" name="unit_id" id="unitSelect" required>
+                            <option value="">Select Unit</option>
                             <?php foreach ($units as $u): ?>
-                            <option value="<?php echo sanitize($u['name']); ?>" <?php echo $unitFilter == $u['name'] ? 'selected' : ''; ?>>
+                            <option value="<?php echo $u['id']; ?>" <?php echo $selectedUnit == $u['id'] ? 'selected' : ''; ?>>
                                 <?php echo sanitize($u['name']); ?>
                             </option>
                             <?php endforeach; ?>
@@ -160,169 +116,143 @@ $statuses = ['Present', 'Absent', 'Weekly Off', 'Holiday', 'Paid Leave', 'Unpaid
                     </div>
                     
                     <div class="col-md-2">
-                        <label class="form-label small">Status</label>
-                        <select class="form-select form-select-sm" name="status">
-                            <option value="">All Status</option>
-                            <?php foreach ($statuses as $s): ?>
-                            <option value="<?php echo $s; ?>" <?php echo $statusFilter == $s ? 'selected' : ''; ?>>
-                                <?php echo $s; ?>
+                        <label class="form-label">Month</label>
+                        <select class="form-select" name="month">
+                            <?php for ($m = 1; $m <= 12; $m++): ?>
+                            <option value="<?php echo $m; ?>" <?php echo $selectedMonth == $m ? 'selected' : ''; ?>>
+                                <?php echo date('F', mktime(0, 0, 0, $m, 1)); ?>
                             </option>
-                            <?php endforeach; ?>
+                            <?php endfor; ?>
                         </select>
                     </div>
                     
-                    <div class="col-12 mt-2">
-                        <button type="submit" class="btn btn-primary btn-sm">
-                            <i class="bi bi-search me-1"></i>Filter
-                        </button>
-                        <a href="index.php?page=attendance/view" class="btn btn-secondary btn-sm">Clear</a>
-                        <button type="button" class="btn btn-success btn-sm" onclick="exportAttendance()">
-                            <i class="bi bi-download me-1"></i>Export
+                    <div class="col-md-2">
+                        <label class="form-label">Year</label>
+                        <select class="form-select" name="year">
+                            <?php 
+                            $currentYear = date('Y');
+                            for ($y = $currentYear; $y >= $currentYear - 2; $y--):
+                            ?>
+                            <option value="<?php echo $y; ?>" <?php echo $selectedYear == $y ? 'selected' : ''; ?>>
+                                <?php echo $y; ?>
+                            </option>
+                            <?php endfor; ?>
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="submit" name="load" value="1" class="btn btn-primary w-100">
+                            <i class="bi bi-search me-1"></i>Load
                         </button>
                     </div>
                 </form>
-                
-                <!-- Summary Cards -->
-                <div class="row g-2 mb-3">
-                    <div class="col-md-2">
-                        <div class="card bg-light">
-                            <div class="card-body py-2 text-center">
-                                <small class="text-muted">Total Records</small>
-                                <h5 class="mb-0"><?php echo number_format($summary['total_records'] ?? 0); ?></h5>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="card bg-success bg-opacity-10">
-                            <div class="card-body py-2 text-center">
-                                <small class="text-success">Present</small>
-                                <h5 class="mb-0 text-success"><?php echo number_format($summary['present'] ?? 0); ?></h5>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="card bg-danger bg-opacity-10">
-                            <div class="card-body py-2 text-center">
-                                <small class="text-danger">Absent</small>
-                                <h5 class="mb-0 text-danger"><?php echo number_format($summary['absent'] ?? 0); ?></h5>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="card bg-info bg-opacity-10">
-                            <div class="card-body py-2 text-center">
-                                <small class="text-info">Weekly Off</small>
-                                <h5 class="mb-0 text-info"><?php echo number_format($summary['weekly_off'] ?? 0); ?></h5>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="card bg-warning bg-opacity-10">
-                            <div class="card-body py-2 text-center">
-                                <small class="text-warning">Leaves</small>
-                                <h5 class="mb-0 text-warning"><?php echo number_format($summary['leaves'] ?? 0); ?></h5>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <div class="card bg-secondary bg-opacity-10">
-                            <div class="card-body py-2 text-center">
-                                <small class="text-secondary">OT Hours</small>
-                                <h5 class="mb-0"><?php echo number_format($summary['total_overtime'] ?? 0, 1); ?>h</h5>
-                            </div>
-                        </div>
-                    </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<?php if ($selectedUnit && isset($_GET['load'])): ?>
+<!-- Attendance Summary Grid -->
+<div class="row mt-3">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="badge bg-info"><?php echo date('F Y', mktime(0, 0, 0, $selectedMonth, 1, $selectedYear)); ?></span>
+                    <span class="badge bg-secondary ms-2">Total Days: <?php echo $daysInMonth; ?></span>
+                    <span class="badge bg-primary ms-2"><?php echo count($attendanceData); ?> Employees</span>
+                </div>
+                <div>
+                    <?php if (!empty($attendanceData)): ?>
+                    <button type="button" class="btn btn-success btn-sm" onclick="exportAttendance()">
+                        <i class="bi bi-download me-1"></i>Export
+                    </button>
+                    <?php endif; ?>
+                    <a href="index.php?page=attendance/view" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-x-lg me-1"></i>Clear
+                    </a>
                 </div>
             </div>
-            
-            <div class="card-body p-0 pt-0">
+            <div class="card-body p-0">
+                <?php if (empty($attendanceData)): ?>
+                <div class="text-center py-5 text-muted">
+                    <i class="bi bi-people fs-1"></i>
+                    <p class="mt-2">No employees found for this unit or no attendance data available.</p>
+                    <a href="index.php?page=attendance/add&client_id=<?php echo $selectedClient; ?>&unit_id=<?php echo $selectedUnit; ?>&month=<?php echo $selectedMonth; ?>&year=<?php echo $selectedYear; ?>&load=1" class="btn btn-primary btn-sm mt-2">
+                        <i class="bi bi-plus me-1"></i>Add Attendance
+                    </a>
+                </div>
+                <?php else: ?>
                 <div class="table-responsive">
-                    <table class="table table-hover table-sm mb-0">
-                        <thead class="table-light">
+                    <table class="table table-bordered table-hover mb-0" style="font-size: 13px;">
+                        <thead class="table-dark">
                             <tr>
-                                <th>Emp Code</th>
-                                <th>Employee Name</th>
-                                <th>Client</th>
-                                <th>Unit</th>
-                                <th>Date</th>
-                                <th>Status</th>
-                                <th>In Time</th>
-                                <th>Out Time</th>
-                                <th>Hours</th>
-                                <th>OT</th>
-                                <th>Source</th>
+                                <th style="width: 50px;">#</th>
+                                <th style="width: 100px;">Emp Code</th>
+                                <th style="width: 180px;">Employee Name</th>
+                                <th style="width: 120px;">Designation</th>
+                                <th style="width: 100px;">Category</th>
+                                <th style="width: 90px;" class="text-center bg-success text-white">Present<br><small>(Days)</small></th>
+                                <th style="width: 90px;" class="text-center bg-info text-white">Extra<br><small>(Days)</small></th>
+                                <th style="width: 90px;" class="text-center bg-warning text-dark">OT Hours<br><small>(Hrs)</small></th>
+                                <th style="width: 90px;" class="text-center bg-secondary text-white">WO<br><small>(Days)</small></th>
+                                <th style="width: 80px;" class="text-center">Source</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php if (!empty($attendance)): ?>
-                                <?php foreach ($attendance as $a): ?>
-                                <tr>
-                                    <td><span class="badge bg-secondary"><?php echo sanitize($a['employee_code'] ?? $a['employee_id']); ?></span></td>
-                                    <td><?php echo sanitize($a['full_name'] ?? '-'); ?></td>
-                                    <td><?php echo sanitize($a['client_name'] ?? '-'); ?></td>
-                                    <td><?php echo sanitize($a['unit_name'] ?? '-'); ?></td>
-                                    <td><?php echo formatDate($a['attendance_date']); ?></td>
-                                    <td>
-                                        <?php
-                                        $statusColors = [
-                                            'Present' => 'success',
-                                            'Absent' => 'danger',
-                                            'Weekly Off' => 'info',
-                                            'Holiday' => 'primary',
-                                            'Half Day' => 'warning'
-                                        ];
-                                        $color = $statusColors[$a['status']] ?? (strpos($a['status'], 'Leave') !== false ? 'warning' : 'secondary');
-                                        ?>
-                                        <span class="badge bg-<?php echo $color; ?>"><?php echo sanitize($a['status']); ?></span>
-                                    </td>
-                                    <td><?php echo $a['in_time'] ? date('H:i', strtotime($a['in_time'])) : '-'; ?></td>
-                                    <td><?php echo $a['out_time'] ? date('H:i', strtotime($a['out_time'])) : '-'; ?></td>
-                                    <td><?php echo $a['working_hours'] ? number_format($a['working_hours'], 1) : '-'; ?></td>
-                                    <td><?php echo $a['overtime_hours'] > 0 ? number_format($a['overtime_hours'], 1) . 'h' : '-'; ?></td>
-                                    <td><small class="text-muted"><?php echo sanitize($a['source'] ?? 'Manual'); ?></small></td>
-                                </tr>
-                                <?php endforeach; ?>
-                            <?php else: ?>
-                                <tr>
-                                    <td colspan="11" class="text-center text-muted py-4">No attendance records found for the selected filters.</td>
-                                </tr>
-                            <?php endif; ?>
+                            <?php 
+                            $sr = 1;
+                            foreach ($attendanceData as $row): 
+                            ?>
+                            <tr>
+                                <td class="text-center"><?php echo $sr++; ?></td>
+                                <td><code><?php echo $row['employee_code']; ?></code></td>
+                                <td><?php echo sanitize($row['full_name']); ?></td>
+                                <td><?php echo sanitize($row['designation']); ?></td>
+                                <td><span class="badge bg-light text-dark"><?php echo sanitize($row['worker_category']); ?></span></td>
+                                <td class="text-center fw-bold <?php echo ($row['total_present'] ?? 0) > 0 ? 'text-success' : 'text-muted'; ?>">
+                                    <?php echo $row['total_present'] ?? '-'; ?>
+                                </td>
+                                <td class="text-center <?php echo ($row['total_extra'] ?? 0) > 0 ? 'text-info' : 'text-muted'; ?>">
+                                    <?php echo $row['total_extra'] ?? '-'; ?>
+                                </td>
+                                <td class="text-center <?php echo ($row['overtime_hours'] ?? 0) > 0 ? 'text-warning' : 'text-muted'; ?>">
+                                    <?php echo $row['overtime_hours'] ?? '-'; ?>
+                                </td>
+                                <td class="text-center <?php echo ($row['total_wo'] ?? 0) > 0 ? 'text-secondary' : 'text-muted'; ?>">
+                                    <?php echo $row['total_wo'] ?? '-'; ?>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge <?php echo ($row['source'] ?? 'Manual') == 'Manual' ? 'bg-primary' : 'bg-success'; ?>">
+                                        <?php echo $row['source'] ?? 'Manual'; ?>
+                                    </span>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
                         </tbody>
+                        <tfoot class="table-light">
+                            <tr class="fw-bold">
+                                <td colspan="5" class="text-end">TOTAL</td>
+                                <td class="text-center text-success"><?php echo number_format($totals['present'], 1); ?></td>
+                                <td class="text-center text-info"><?php echo number_format($totals['extra'], 1); ?></td>
+                                <td class="text-center text-warning"><?php echo number_format($totals['ot_hours'], 1); ?></td>
+                                <td class="text-center"><?php echo $totals['wo']; ?></td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
                 
-                <!-- Pagination -->
-                <?php if ($total > $perPage): ?>
                 <div class="card-footer">
                     <div class="d-flex justify-content-between align-items-center">
-                        <small class="text-muted">Showing <?php echo $offset + 1; ?> - <?php echo min($offset + $perPage, $total); ?> of <?php echo number_format($total); ?> records</small>
-                        <nav>
-                            <ul class="pagination pagination-sm mb-0">
-                                <?php if ($page > 1): ?>
-                                <li class="page-item">
-                                    <a class="page-link" href="?page=attendance/view&month=<?php echo $monthFilter; ?>&year=<?php echo $yearFilter; ?>&client=<?php echo urlencode($clientFilter); ?>&unit=<?php echo urlencode($unitFilter); ?>&status=<?php echo urlencode($statusFilter); ?>&pg=<?php echo $page - 1; ?>">Previous</a>
-                                </li>
-                                <?php endif; ?>
-                                
-                                <?php 
-                                $totalPages = ceil($total / $perPage);
-                                $startPage = max(1, $page - 2);
-                                $endPage = min($totalPages, $page + 2);
-                                
-                                for ($i = $startPage; $i <= $endPage; $i++): 
-                                ?>
-                                <li class="page-item <?php echo $i == $page ? 'active' : ''; ?>">
-                                    <a class="page-link" href="?page=attendance/view&month=<?php echo $monthFilter; ?>&year=<?php echo $yearFilter; ?>&client=<?php echo urlencode($clientFilter); ?>&unit=<?php echo urlencode($unitFilter); ?>&status=<?php echo urlencode($statusFilter); ?>&pg=<?php echo $i; ?>"><?php echo $i; ?></a>
-                                </li>
-                                <?php endfor; ?>
-                                
-                                <?php if ($page < $totalPages): ?>
-                                <li class="page-item">
-                                    <a class="page-link" href="?page=attendance/view&month=<?php echo $monthFilter; ?>&year=<?php echo $yearFilter; ?>&client=<?php echo urlencode($clientFilter); ?>&unit=<?php echo urlencode($unitFilter); ?>&status=<?php echo urlencode($statusFilter); ?>&pg=<?php echo $page + 1; ?>">Next</a>
-                                </li>
-                                <?php endif; ?>
-                            </ul>
-                        </nav>
+                        <div class="text-muted">
+                            <small><i class="bi bi-info-circle me-1"></i>Showing attendance summary for <?php echo $totals['employees']; ?> employees</small>
+                        </div>
+                        <div>
+                            <a href="index.php?page=attendance/add&client_id=<?php echo $selectedClient; ?>&unit_id=<?php echo $selectedUnit; ?>&month=<?php echo $selectedMonth; ?>&year=<?php echo $selectedYear; ?>&load=1" class="btn btn-primary btn-sm">
+                                <i class="bi bi-pencil me-1"></i>Edit Attendance
+                            </a>
+                        </div>
                     </div>
                 </div>
                 <?php endif; ?>
@@ -330,26 +260,47 @@ $statuses = ['Present', 'Absent', 'Weekly Off', 'Holiday', 'Paid Leave', 'Unpaid
         </div>
     </div>
 </div>
+<?php endif; ?>
 
+<?php
+$extraJS = <<<'JS'
 <script>
 // Load units when client changes
-$('#clientFilter').change(function() {
-    var clientName = $(this).val();
-    if (clientName) {
-        $.get('index.php?page=api/units', {client: clientName}, function(data) {
-            var units = JSON.parse(data);
-            $('#unitFilter').html('<option value="">All Units</option>');
-            units.forEach(function(u) {
-                $('#unitFilter').append('<option value="' + u.name + '">' + u.name + '</option>');
-            });
-        });
-    } else {
-        $('#unitFilter').html('<option value="">All Units</option>');
+document.getElementById('clientSelect').addEventListener('change', function() {
+    const clientId = this.value;
+    const unitSelect = document.getElementById('unitSelect');
+    
+    unitSelect.innerHTML = '<option value="">Loading...</option>';
+    
+    if (!clientId) {
+        unitSelect.innerHTML = '<option value="">Select Unit</option>';
+        return;
     }
+    
+    fetch('index.php?page=api/units&client_id=' + clientId)
+        .then(response => response.json())
+        .then(data => {
+            unitSelect.innerHTML = '<option value="">Select Unit</option>';
+            if (data.units) {
+                data.units.forEach(unit => {
+                    const option = document.createElement('option');
+                    option.value = unit.id;
+                    option.textContent = unit.name;
+                    unitSelect.appendChild(option);
+                });
+            }
+        })
+        .catch(() => {
+            unitSelect.innerHTML = '<option value="">Select Unit</option>';
+        });
 });
 
+// Export attendance
 function exportAttendance() {
-    var params = $('#clientFilter').closest('form').serialize();
-    window.location.href = 'index.php?page=attendance/export&' + params;
+    const params = new URLSearchParams(window.location.search);
+    params.set('export', '1');
+    window.location.href = 'index.php?' + params.toString();
 }
 </script>
+JS;
+?>
