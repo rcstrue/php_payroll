@@ -170,12 +170,6 @@ try {
     $clients = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) {}
 
-$units = [];
-try {
-    $stmt = $db->query("SELECT id, name, client_id FROM units WHERE is_active = 1 ORDER BY name");
-    $units = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (Exception $e) {}
-
 // Indian states list
 $statesList = [
     'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
@@ -185,7 +179,6 @@ $statesList = [
     'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura',
     'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
     'Delhi', 'Jammu and Kashmir', 'Ladakh', 'Puducherry',
-    'Andaman and Nicobar Islands', 'Chandigarh', 'Dadra and Nagar Haveli and Daman and Diu', 'Lakshadweep'
 ];
 ?>
 
@@ -419,7 +412,7 @@ $statesList = [
                     <div class="row g-3">
                         <div class="col-md-3">
                             <label class="form-label">Client</label>
-                            <select class="form-select" name="client_id" id="client_id" onchange="filterUnits()">
+                            <select class="form-select" name="client_id" id="client_id">
                                 <option value="">Select Client</option>
                                 <?php foreach ($clients as $c): ?>
                                 <option value="<?php echo $c['id']; ?>" 
@@ -433,16 +426,8 @@ $statesList = [
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">Unit</label>
-                            <select class="form-select" name="unit_id" id="unit_id" onchange="updateUnitName()">
+                            <select class="form-select" name="unit_id" id="unit_id">
                                 <option value="">Select Unit</option>
-                                <?php foreach ($units as $u): ?>
-                                <option value="<?php echo $u['id']; ?>" 
-                                        data-name="<?php echo sanitize($u['name']); ?>"
-                                        data-client="<?php echo $u['client_id']; ?>"
-                                        <?php echo ($employeeData['unit_id'] ?? '') == $u['id'] ? 'selected' : ''; ?>>
-                                    <?php echo sanitize($u['name']); ?>
-                                </option>
-                                <?php endforeach; ?>
                             </select>
                             <input type="hidden" name="unit_name" id="unit_name" value="<?php echo sanitize($employeeData['unit_name'] ?? ''); ?>">
                         </div>
@@ -510,33 +495,33 @@ $statesList = [
                     <div class="row g-3">
                         <div class="col-md-2">
                             <label class="form-label">Basic Wage</label>
-                            <input type="number" class="form-control" name="basic_wage" step="0.01" id="basic_wage"
-                                   value="<?php echo $employeeData['basic_wage'] ?? ''; ?>">
+                            <input type="number" class="form-control no-spinner" name="basic_wage" id="basic_wage" min="0"
+                                   value="<?php echo intval($employeeData['basic_wage'] ?? 0); ?>">
                         </div>
                         <div class="col-md-2">
                             <label class="form-label">DA</label>
-                            <input type="number" class="form-control" name="da" step="0.01" id="da"
-                                   value="<?php echo $employeeData['da'] ?? ''; ?>">
+                            <input type="number" class="form-control no-spinner" name="da" id="da" min="0"
+                                   value="<?php echo intval($employeeData['da'] ?? 0); ?>">
                         </div>
                         <div class="col-md-2">
                             <label class="form-label">HRA</label>
-                            <input type="number" class="form-control" name="hra" step="0.01" id="hra"
-                                   value="<?php echo $employeeData['hra'] ?? ''; ?>">
+                            <input type="number" class="form-control no-spinner" name="hra" id="hra" min="0"
+                                   value="<?php echo intval($employeeData['hra'] ?? 0); ?>">
                         </div>
                         <div class="col-md-2">
                             <label class="form-label">Conveyance</label>
-                            <input type="number" class="form-control" name="conveyance" step="0.01"
-                                   value="<?php echo $employeeData['conveyance'] ?? ''; ?>">
+                            <input type="number" class="form-control no-spinner" name="conveyance" min="0"
+                                   value="<?php echo intval($employeeData['conveyance'] ?? 0); ?>">
                         </div>
                         <div class="col-md-2">
                             <label class="form-label">Medical</label>
-                            <input type="number" class="form-control" name="medical_allowance" step="0.01"
-                                   value="<?php echo $employeeData['medical_allowance'] ?? ''; ?>">
+                            <input type="number" class="form-control no-spinner" name="medical_allowance" min="0"
+                                   value="<?php echo intval($employeeData['medical_allowance'] ?? 0); ?>">
                         </div>
                         <div class="col-md-2">
                             <label class="form-label">Gross Salary</label>
-                            <input type="number" class="form-control" name="gross_salary" step="0.01" id="gross_salary"
-                                   value="<?php echo $employeeData['gross_salary'] ?? ''; ?>">
+                            <input type="number" class="form-control no-spinner" name="gross_salary" id="gross_salary" min="0"
+                                   value="<?php echo intval($employeeData['gross_salary'] ?? 0); ?>">
                         </div>
                     </div>
                 </div>
@@ -663,47 +648,65 @@ $statesList = [
     </div>
 </div>
 
+<style>
+/* Remove spinner arrows from number inputs */
+.no-spinner::-webkit-outer-spin-button,
+.no-spinner::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.no-spinner[type=number] {
+    -moz-appearance: textfield;
+}
+</style>
+
 <?php
-$inlineJS = <<<'JS'
+$extraJS = <<<'JS'
+<script>
 // Calculate gross salary
 function calculateGross() {
-    const basic = parseFloat($('#basic_wage').val()) || 0;
-    const da = parseFloat($('#da').val()) || 0;
-    const hra = parseFloat($('#hra').val()) || 0;
-    const conveyance = parseFloat($('input[name="conveyance"]').val()) || 0;
-    const medical = parseFloat($('input[name="medical_allowance"]').val()) || 0;
-    const special = parseFloat($('input[name="special_allowance"]').val()) || 0;
-    const other = parseFloat($('input[name="other_allowance"]').val()) || 0;
+    const basic = parseInt($('#basic_wage').val()) || 0;
+    const da = parseInt($('#da').val()) || 0;
+    const hra = parseInt($('#hra').val()) || 0;
+    const conveyance = parseInt($('input[name="conveyance"]').val()) || 0;
+    const medical = parseInt($('input[name="medical_allowance"]').val()) || 0;
     
-    $('#gross_salary').val(basic + da + hra + conveyance + medical + special + other);
+    $('#gross_salary').val(basic + da + hra + conveyance + medical);
 }
 
-$('#basic_wage, #da, #hra, input[name="conveyance"], input[name="medical_allowance"], input[name="special_allowance"], input[name="other_allowance"]').on('input', calculateGross);
+$('#basic_wage, #da, #hra, input[name="conveyance"], input[name="medical_allowance"]').on('input', calculateGross);
 
-// Filter units by client
-function filterUnits() {
-    const clientId = $('#client_id').val();
-    const clientOption = $('#client_id option:selected');
-    const clientName = clientOption.data('name') || '';
+// Filter units by client - AJAX
+function filterUnits(clientId, selectedUnitId) {
+    const unitSelect = document.getElementById('unit_id');
+    unitSelect.innerHTML = '<option value="">Loading...</option>';
     
-    $('#client_name').val(clientName);
-    
-    // Filter unit dropdown
-    $('#unit_id option').each(function() {
-        const unitClient = $(this).data('client');
-        if (!clientId || unitClient == clientId || !$(this).val()) {
-            $(this).show();
-        } else {
-            $(this).hide();
-        }
-    });
-    
-    // Reset unit selection if not matching
-    const currentUnit = $('#unit_id option:selected');
-    if (currentUnit.data('client') != clientId) {
-        $('#unit_id').val('');
-        $('#unit_name').val('');
+    if (!clientId) {
+        unitSelect.innerHTML = '<option value="">Select Unit</option>';
+        return;
     }
+    
+    fetch('index.php?page=api/units&client_id=' + clientId)
+        .then(response => response.json())
+        .then(data => {
+            unitSelect.innerHTML = '<option value="">Select Unit</option>';
+            if (data.units) {
+                data.units.forEach(unit => {
+                    const option = document.createElement('option');
+                    option.value = unit.id;
+                    option.textContent = unit.name;
+                    option.setAttribute('data-name', unit.name);
+                    if (unit.id == selectedUnitId) {
+                        option.selected = true;
+                        $('#unit_name').val(unit.name);
+                    }
+                    unitSelect.appendChild(option);
+                });
+            }
+        })
+        .catch(err => {
+            unitSelect.innerHTML = '<option value="">Select Unit</option>';
+        });
 }
 
 function updateUnitName() {
@@ -712,9 +715,26 @@ function updateUnitName() {
     $('#unit_name').val(unitName);
 }
 
-// Initialize on page load
-$(document).ready(function() {
-    filterUnits();
+// Client change handler
+$('#client_id').on('change', function() {
+    const clientId = $(this).val();
+    const clientName = $('#client_id option:selected').data('name') || '';
+    $('#client_name').val(clientName);
+    filterUnits(clientId, null);
 });
+
+// Unit change handler
+$('#unit_id').on('change', updateUnitName);
+
+// On page load - filter units if client is selected (edit mode)
+$(document).ready(function() {
+    const clientId = $('#client_id').val();
+    const selectedUnitId = '<?php echo $employeeData['unit_id'] ?? ''; ?>';
+    
+    if (clientId) {
+        filterUnits(clientId, selectedUnitId);
+    }
+});
+</script>
 JS;
 ?>

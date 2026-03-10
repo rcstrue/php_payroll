@@ -104,12 +104,9 @@ $selectedMonth = isset($_GET['month']) ? (int)$_GET['month'] : $previousMonth;
 $selectedYear = isset($_GET['year']) ? (int)$_GET['year'] : $previousYear;
 
 // Ensure attendance_summary table exists with correct structure
-// Note: employee_id is INT matching employees.employee_code (not UUID)
 try {
-    // First check if table exists
     $checkTable = $db->query("SHOW TABLES LIKE 'attendance_summary'");
     if ($checkTable->rowCount() == 0) {
-        // Table doesn't exist, create it
         $db->exec("CREATE TABLE `attendance_summary` (
             `id` int(11) NOT NULL AUTO_INCREMENT,
             `employee_id` int(11) NOT NULL,
@@ -127,35 +124,6 @@ try {
             UNIQUE KEY `uniq_emp_month_year` (`employee_id`, `month`, `year`),
             KEY `idx_unit_month_year` (`unit_id`, `month`, `year`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    } else {
-        // Table exists, check and add missing columns
-        $columns = $db->query("SHOW COLUMNS FROM attendance_summary")->fetchAll(PDO::FETCH_COLUMN);
-        
-        if (!in_array('total_present', $columns)) {
-            try {
-                $db->exec("ALTER TABLE attendance_summary ADD COLUMN total_present decimal(5,2) DEFAULT 0.00 AFTER year");
-            } catch (Exception $e) { error_log("Failed to add total_present: " . $e->getMessage()); }
-        }
-        if (!in_array('total_extra', $columns)) {
-            try {
-                $db->exec("ALTER TABLE attendance_summary ADD COLUMN total_extra decimal(5,2) DEFAULT 0.00 AFTER total_present");
-            } catch (Exception $e) { error_log("Failed to add total_extra: " . $e->getMessage()); }
-        }
-        if (!in_array('overtime_hours', $columns)) {
-            try {
-                $db->exec("ALTER TABLE attendance_summary ADD COLUMN overtime_hours decimal(6,2) DEFAULT 0.00 AFTER total_extra");
-            } catch (Exception $e) { error_log("Failed to add overtime_hours: " . $e->getMessage()); }
-        }
-        if (!in_array('total_wo', $columns)) {
-            try {
-                $db->exec("ALTER TABLE attendance_summary ADD COLUMN total_wo int(3) DEFAULT 0 AFTER overtime_hours");
-            } catch (Exception $e) { error_log("Failed to add total_wo: " . $e->getMessage()); }
-        }
-        if (!in_array('source', $columns)) {
-            try {
-                $db->exec("ALTER TABLE attendance_summary ADD COLUMN source enum('Manual','Excel Upload') DEFAULT 'Manual' AFTER total_wo");
-            } catch (Exception $e) { error_log("Failed to add source: " . $e->getMessage()); }
-        }
     }
 } catch (Exception $e) {
     error_log("Table check/creation failed: " . $e->getMessage());
@@ -176,20 +144,17 @@ if ($selectedClient) {
 // Get employees and their attendance when unit is selected
 $employees = [];
 if ($selectedUnit && isset($_GET['load'])) {
-    // Get employees for this unit
+    // Get employees for this unit - removed designation and worker_category
     $stmt = $db->prepare("
-        SELECT e.id, e.employee_code, e.full_name, e.designation, e.worker_category,
-               ess.basic_wage, ess.gross_salary
+        SELECT e.id, e.employee_code, e.full_name
         FROM employees e
-        LEFT JOIN employee_salary_structures ess ON e.id = ess.employee_id AND ess.effective_to IS NULL
-        WHERE e.unit_id = ? AND e.status = 'approved'
+        WHERE e.unit_id = ? AND e.status != 'pending_hr_verification'
         ORDER BY e.employee_code
     ");
     $stmt->execute([$selectedUnit]);
     $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     // Get existing attendance summary if any
-    // Note: attendance_summary.employee_id is INT matching employee_code
     foreach ($employees as &$emp) {
         try {
             $stmt = $db->prepare("
@@ -223,6 +188,18 @@ if ($selectedUnit && isset($_GET['load'])) {
 // Days in selected month
 $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $selectedMonth, $selectedYear);
 ?>
+
+<style>
+/* Remove spinner arrows from number inputs */
+.no-spinner::-webkit-outer-spin-button,
+.no-spinner::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.no-spinner[type=number] {
+    -moz-appearance: textfield;
+}
+</style>
 
 <div class="row">
     <div class="col-12">
@@ -330,13 +307,11 @@ $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $selectedMonth, $selectedYear);
                                 <tr>
                                     <th style="width: 50px;">#</th>
                                     <th style="width: 100px;">Emp Code</th>
-                                    <th style="width: 180px;">Employee Name</th>
-                                    <th style="width: 120px;">Designation</th>
-                                    <th style="width: 100px;">Category</th>
-                                    <th style="width: 90px;" class="text-center bg-success text-white">Present<br><small>(Days)</small></th>
-                                    <th style="width: 90px;" class="text-center bg-info text-white">Extra<br><small>(Days)</small></th>
-                                    <th style="width: 90px;" class="text-center bg-warning text-dark">OT Hours<br><small>(Hrs)</small></th>
-                                    <th style="width: 90px;" class="text-center bg-secondary text-white">WO<br><small>(Days)</small></th>
+                                    <th style="width: 250px;">Employee Name</th>
+                                    <th style="width: 100px;" class="text-center bg-success text-white">Present<br><small>(Days)</small></th>
+                                    <th style="width: 100px;" class="text-center bg-info text-white">Extra<br><small>(Days)</small></th>
+                                    <th style="width: 100px;" class="text-center bg-warning text-dark">OT Hours<br><small>(Hrs)</small></th>
+                                    <th style="width: 100px;" class="text-center bg-secondary text-white">WO<br><small>(Days)</small></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -351,30 +326,28 @@ $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $selectedMonth, $selectedYear);
                                         <code><?php echo $emp['employee_code']; ?></code>
                                     </td>
                                     <td><?php echo sanitize($emp['full_name']); ?></td>
-                                    <td><?php echo sanitize($emp['designation']); ?></td>
-                                    <td><span class="badge bg-light text-dark"><?php echo sanitize($emp['worker_category']); ?></span></td>
                                     <td>
                                         <input type="number" name="total_present[<?php echo $emp['employee_code']; ?>]" 
                                                value="<?php echo $emp['total_present']; ?>" 
-                                               class="form-control form-control-sm text-center" 
-                                               min="0" max="31" step="0.5">
+                                               class="form-control form-control-sm text-center no-spinner" 
+                                               min="0" max="31">
                                     </td>
                                     <td>
                                         <input type="number" name="total_extra[<?php echo $emp['employee_code']; ?>]" 
                                                value="<?php echo $emp['total_extra']; ?>" 
-                                               class="form-control form-control-sm text-center" 
-                                               min="0" max="31" step="0.5">
+                                               class="form-control form-control-sm text-center no-spinner" 
+                                               min="0" max="31">
                                     </td>
                                     <td>
                                         <input type="number" name="overtime_hours[<?php echo $emp['employee_code']; ?>]" 
                                                value="<?php echo $emp['overtime_hours']; ?>" 
-                                               class="form-control form-control-sm text-center" 
-                                               min="0" max="300" step="0.5">
+                                               class="form-control form-control-sm text-center no-spinner" 
+                                               min="0" max="300">
                                     </td>
                                     <td>
                                         <input type="number" name="total_wo[<?php echo $emp['employee_code']; ?>]" 
                                                value="<?php echo $emp['total_wo']; ?>" 
-                                               class="form-control form-control-sm text-center" 
+                                               class="form-control form-control-sm text-center no-spinner" 
                                                min="0" max="8">
                                     </td>
                                 </tr>

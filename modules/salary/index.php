@@ -40,14 +40,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_salaries'])) {
         $db->beginTransaction();
         
         foreach ($_POST['employee_id'] as $index => $empId) {
-            $basicWage = floatval($_POST['basic_wage'][$index] ?? 0);
-            $da = floatval($_POST['da'][$index] ?? 0);
-            $hra = floatval($_POST['hra'][$index] ?? 0);
-            $conveyance = floatval($_POST['conveyance'][$index] ?? 0);
-            $medical = floatval($_POST['medical_allowance'][$index] ?? 0);
-            $special = floatval($_POST['special_allowance'][$index] ?? 0);
-            $other = floatval($_POST['other_allowance'][$index] ?? 0);
-            $grossSalary = floatval($_POST['gross_salary'][$index] ?? 0);
+            $basicWage = intval($_POST['basic_wage'][$index] ?? 0);
+            $da = intval($_POST['da'][$index] ?? 0);
+            $hra = intval($_POST['hra'][$index] ?? 0);
+            $conveyance = intval($_POST['conveyance'][$index] ?? 0);
+            $medical = intval($_POST['medical_allowance'][$index] ?? 0);
+            $special = intval($_POST['special_allowance'][$index] ?? 0);
+            $other = intval($_POST['other_allowance'][$index] ?? 0);
+            $grossSalary = intval($_POST['gross_salary'][$index] ?? 0);
             $pfApplicable = isset($_POST['pf_applicable'][$index]) ? 1 : 0;
             $esiApplicable = isset($_POST['esi_applicable'][$index]) ? 1 : 0;
             $ptApplicable = isset($_POST['pt_applicable'][$index]) ? 1 : 0;
@@ -104,7 +104,7 @@ $employees = [];
 if ($selectedUnit && isset($_GET['load'])) {
     try {
         $stmt = $db->prepare("
-            SELECT e.id, e.employee_code, e.full_name, e.designation, e.worker_category, e.status,
+            SELECT e.id, e.employee_code, e.full_name, e.status,
                    ess.id as salary_id, ess.basic_wage, ess.da, ess.hra, ess.conveyance,
                    ess.medical_allowance, ess.special_allowance, ess.other_allowance, ess.gross_salary,
                    ess.pf_applicable, ess.esi_applicable, ess.pt_applicable
@@ -120,6 +120,18 @@ if ($selectedUnit && isset($_GET['load'])) {
     }
 }
 ?>
+
+<style>
+/* Remove spinner arrows from number inputs */
+.no-spinner::-webkit-outer-spin-button,
+.no-spinner::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.no-spinner[type=number] {
+    -moz-appearance: textfield;
+}
+</style>
 
 <div class="row">
     <div class="col-12">
@@ -200,8 +212,7 @@ if ($selectedUnit && isset($_GET['load'])) {
                                 <tr>
                                     <th style="width: 40px;">#</th>
                                     <th style="width: 60px;">Emp Code</th>
-                                    <th style="width: 150px;">Employee Name</th>
-                                    <th style="width: 100px;">Category</th>
+                                    <th style="width: 180px;">Employee Name</th>
                                     <th style="width: 90px;">Basic Wage</th>
                                     <th style="width: 80px;">DA</th>
                                     <th style="width: 80px;">HRA</th>
@@ -243,38 +254,37 @@ if ($selectedUnit && isset($_GET['load'])) {
                                         <?php endif; ?>
                                     </td>
                                     <td><?php echo sanitize($emp['full_name']); ?></td>
-                                    <td><small><?php echo sanitize($emp['worker_category']); ?></small></td>
                                     <td>
-                                        <input type="number" name="basic_wage[]" class="form-control form-control-sm text-end basic-input" 
-                                               value="<?php echo $emp['basic_wage'] ?? 0; ?>" step="0.01" min="0">
+                                        <input type="number" name="basic_wage[]" class="form-control form-control-sm text-end basic-input no-spinner" 
+                                               value="<?php echo intval($emp['basic_wage'] ?? 0); ?>" min="0">
                                     </td>
                                     <td>
-                                        <input type="number" name="da[]" class="form-control form-control-sm text-end" 
-                                               value="<?php echo $emp['da'] ?? 0; ?>" step="0.01" min="0">
+                                        <input type="number" name="da[]" class="form-control form-control-sm text-end no-spinner" 
+                                               value="<?php echo intval($emp['da'] ?? 0); ?>" min="0">
                                     </td>
                                     <td>
-                                        <input type="number" name="hra[]" class="form-control form-control-sm text-end" 
-                                               value="<?php echo $emp['hra'] ?? 0; ?>" step="0.01" min="0">
+                                        <input type="number" name="hra[]" class="form-control form-control-sm text-end no-spinner" 
+                                               value="<?php echo intval($emp['hra'] ?? 0); ?>" min="0">
                                     </td>
                                     <td>
-                                        <input type="number" name="conveyance[]" class="form-control form-control-sm text-end" 
-                                               value="<?php echo $emp['conveyance'] ?? 0; ?>" step="0.01" min="0">
+                                        <input type="number" name="conveyance[]" class="form-control form-control-sm text-end no-spinner" 
+                                               value="<?php echo intval($emp['conveyance'] ?? 0); ?>" min="0">
                                     </td>
                                     <td>
-                                        <input type="number" name="medical_allowance[]" class="form-control form-control-sm text-end" 
-                                               value="<?php echo $emp['medical_allowance'] ?? 0; ?>" step="0.01" min="0">
+                                        <input type="number" name="medical_allowance[]" class="form-control form-control-sm text-end no-spinner" 
+                                               value="<?php echo intval($emp['medical_allowance'] ?? 0); ?>" min="0">
                                     </td>
                                     <td>
-                                        <input type="number" name="special_allowance[]" class="form-control form-control-sm text-end" 
-                                               value="<?php echo $emp['special_allowance'] ?? 0; ?>" step="0.01" min="0">
+                                        <input type="number" name="special_allowance[]" class="form-control form-control-sm text-end no-spinner" 
+                                               value="<?php echo intval($emp['special_allowance'] ?? 0); ?>" min="0">
                                     </td>
                                     <td>
-                                        <input type="number" name="other_allowance[]" class="form-control form-control-sm text-end" 
-                                               value="<?php echo $emp['other_allowance'] ?? 0; ?>" step="0.01" min="0">
+                                        <input type="number" name="other_allowance[]" class="form-control form-control-sm text-end no-spinner" 
+                                               value="<?php echo intval($emp['other_allowance'] ?? 0); ?>" min="0">
                                     </td>
                                     <td>
-                                        <input type="number" name="gross_salary[]" class="form-control form-control-sm text-end fw-bold gross-input" 
-                                               value="<?php echo $emp['gross_salary'] ?? $grossCalculated; ?>" step="0.01" min="0">
+                                        <input type="number" name="gross_salary[]" class="form-control form-control-sm text-end fw-bold gross-input no-spinner" 
+                                               value="<?php echo intval($emp['gross_salary'] ?? $grossCalculated); ?>" min="0">
                                     </td>
                                     <td class="text-center bg-light">
                                         <input type="checkbox" name="pf_applicable[]" value="<?php echo $emp['id']; ?>" 
@@ -369,18 +379,18 @@ document.getElementById('selectAllPT').addEventListener('change', function() {
 });
 
 // Auto-calculate gross when any component changes
-document.querySelectorAll('.basic-input, input[name="da[]"], input[name="hra[]"], input[name="conveyance[]"], input[name="medical_allowance[]"], input[name="special_allowance[]"], input[name="other_allowance[]"]').forEach(function(input, index) {
+document.querySelectorAll('.basic-input, input[name="da[]"], input[name="hra[]"], input[name="conveyance[]"], input[name="medical_allowance[]"], input[name="special_allowance[]"], input[name="other_allowance[]"]').forEach(function(input) {
     input.addEventListener('input', function() {
         const row = this.closest('tr');
-        const basic = parseFloat(row.querySelector('input[name="basic_wage[]"]').value) || 0;
-        const da = parseFloat(row.querySelector('input[name="da[]"]').value) || 0;
-        const hra = parseFloat(row.querySelector('input[name="hra[]"]').value) || 0;
-        const conv = parseFloat(row.querySelector('input[name="conveyance[]"]').value) || 0;
-        const med = parseFloat(row.querySelector('input[name="medical_allowance[]"]').value) || 0;
-        const special = parseFloat(row.querySelector('input[name="special_allowance[]"]').value) || 0;
-        const other = parseFloat(row.querySelector('input[name="other_allowance[]"]').value) || 0;
+        const basic = parseInt(row.querySelector('input[name="basic_wage[]"]').value) || 0;
+        const da = parseInt(row.querySelector('input[name="da[]"]').value) || 0;
+        const hra = parseInt(row.querySelector('input[name="hra[]"]').value) || 0;
+        const conv = parseInt(row.querySelector('input[name="conveyance[]"]').value) || 0;
+        const med = parseInt(row.querySelector('input[name="medical_allowance[]"]').value) || 0;
+        const special = parseInt(row.querySelector('input[name="special_allowance[]"]').value) || 0;
+        const other = parseInt(row.querySelector('input[name="other_allowance[]"]').value) || 0;
         
-        row.querySelector('.gross-input').value = (basic + da + hra + conv + med + special + other).toFixed(2);
+        row.querySelector('.gross-input').value = basic + da + hra + conv + med + special + other;
     });
 });
 </script>

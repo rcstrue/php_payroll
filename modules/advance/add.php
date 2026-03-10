@@ -17,10 +17,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_advance'])) {
     $errors = [];
     
     try {
-        // Ensure table exists with correct structure (INT employee_id to match employee_code)
+        // Ensure table exists with correct structure
         $db->exec("CREATE TABLE IF NOT EXISTS `employee_advances` (
             `id` int(11) NOT NULL AUTO_INCREMENT,
-            `employee_id` int(11) NOT NULL,
+            `employee_id` varchar(36) NOT NULL,
             `unit_id` int(11) DEFAULT NULL,
             `month` int(2) NOT NULL,
             `year` int(4) NOT NULL,
@@ -39,15 +39,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_advance'])) {
         $errors[] = "Table creation failed: " . $e->getMessage();
     }
     
-    foreach ($employeeCodes as $empCode) {
-        $empCode = (int)$empCode;
-        $adv1 = isset($_POST['adv1'][$empCode]) ? floatval($_POST['adv1'][$empCode]) : 0;
-        $adv2 = isset($_POST['adv2'][$empCode]) ? floatval($_POST['adv2'][$empCode]) : 0;
-        $officeAdvance = isset($_POST['office_advance'][$empCode]) ? floatval($_POST['office_advance'][$empCode]) : 0;
-        $dressAdvance = isset($_POST['dress_advance'][$empCode]) ? floatval($_POST['dress_advance'][$empCode]) : 0;
+    foreach ($employeeCodes as $empUuid) {
+        $empUuid = sanitize($empUuid);
+        $adv1 = isset($_POST['adv1'][$empUuid]) ? intval($_POST['adv1'][$empUuid]) : 0;
+        $adv2 = isset($_POST['adv2'][$empUuid]) ? intval($_POST['adv2'][$empUuid]) : 0;
+        $officeAdvance = isset($_POST['office_advance'][$empUuid]) ? intval($_POST['office_advance'][$empUuid]) : 0;
+        $dressAdvance = isset($_POST['dress_advance'][$empUuid]) ? intval($_POST['dress_advance'][$empUuid]) : 0;
         
         try {
-            // Use INSERT ... ON DUPLICATE KEY UPDATE for upsert
             $stmt = $db->prepare("
                 INSERT INTO employee_advances 
                 (employee_id, unit_id, month, year, adv1, adv2, office_advance, dress_advance)
@@ -59,10 +58,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_advance'])) {
                     dress_advance = VALUES(dress_advance),
                     updated_at = CURRENT_TIMESTAMP
             ");
-            $stmt->execute([$empCode, $unitId, $month, $year, $adv1, $adv2, $officeAdvance, $dressAdvance]);
+            $stmt->execute([$empUuid, $unitId, $month, $year, $adv1, $adv2, $officeAdvance, $dressAdvance]);
             $savedCount++;
         } catch (Exception $e) {
-            $errors[] = "Failed to save advance for employee $empCode: " . $e->getMessage();
+            $errors[] = "Failed to save advance: " . $e->getMessage();
         }
     }
     
@@ -74,7 +73,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_advance'])) {
         setFlash('error', "Failed to save advances. " . implode(', ', $errors));
     }
     
-    // Redirect using JavaScript since headers already sent
     $redirectUrl = "index.php?page=advance/add&client_id=" . ($_GET['client_id'] ?? '') . 
                    "&unit_id=$unitId&month=$month&year=$year&load=1";
     echo "<script>window.location.href='$redirectUrl';</script>";
@@ -86,69 +84,13 @@ $clients = [];
 try {
     $stmt = $db->query("SELECT id, name, client_code FROM clients WHERE is_active = 1 ORDER BY name");
     $clients = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (Exception $e) {
-    // Table doesn't exist
-}
+} catch (Exception $e) {}
 
-// Get selected filters - default to previous month
-$previousMonth = date('n') - 1;
-$previousYear = date('Y');
-if ($previousMonth < 1) {
-    $previousMonth = 12;
-    $previousYear--;
-}
+// Get selected filters - default to current month
 $selectedClient = isset($_GET['client_id']) ? (int)$_GET['client_id'] : null;
 $selectedUnit = isset($_GET['unit_id']) ? (int)$_GET['unit_id'] : null;
-$selectedMonth = isset($_GET['month']) ? (int)$_GET['month'] : $previousMonth;
-$selectedYear = isset($_GET['year']) ? (int)$_GET['year'] : $previousYear;
-
-// Ensure employee_advances table exists with correct structure
-// Note: employee_id is INT matching employees.employee_code (not UUID)
-try {
-    // First check if table exists
-    $checkTable = $db->query("SHOW TABLES LIKE 'employee_advances'");
-    if ($checkTable->rowCount() == 0) {
-        // Table doesn't exist, create it
-        $db->exec("CREATE TABLE `employee_advances` (
-            `id` int(11) NOT NULL AUTO_INCREMENT,
-            `employee_id` int(11) NOT NULL,
-            `unit_id` int(11) DEFAULT NULL,
-            `month` int(2) NOT NULL,
-            `year` int(4) NOT NULL,
-            `adv1` decimal(10,2) DEFAULT 0.00,
-            `adv2` decimal(10,2) DEFAULT 0.00,
-            `office_advance` decimal(10,2) DEFAULT 0.00,
-            `dress_advance` decimal(10,2) DEFAULT 0.00,
-            `remarks` text DEFAULT NULL,
-            `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-            `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-            PRIMARY KEY (`id`),
-            UNIQUE KEY `uniq_emp_month_year` (`employee_id`, `month`, `year`),
-            KEY `idx_unit_month_year` (`unit_id`, `month`, `year`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    } else {
-        // Table exists, check and add missing columns
-        $columns = $db->query("SHOW COLUMNS FROM employee_advances")->fetchAll(PDO::FETCH_COLUMN);
-        
-        if (!in_array('adv1', $columns)) {
-            $db->exec("ALTER TABLE employee_advances ADD COLUMN adv1 decimal(10,2) DEFAULT 0.00 AFTER year");
-        }
-        if (!in_array('adv2', $columns)) {
-            $db->exec("ALTER TABLE employee_advances ADD COLUMN adv2 decimal(10,2) DEFAULT 0.00 AFTER adv1");
-        }
-        if (!in_array('office_advance', $columns)) {
-            $db->exec("ALTER TABLE employee_advances ADD COLUMN office_advance decimal(10,2) DEFAULT 0.00 AFTER adv2");
-        }
-        if (!in_array('dress_advance', $columns)) {
-            $db->exec("ALTER TABLE employee_advances ADD COLUMN dress_advance decimal(10,2) DEFAULT 0.00 AFTER office_advance");
-        }
-        if (!in_array('remarks', $columns)) {
-            $db->exec("ALTER TABLE employee_advances ADD COLUMN remarks text AFTER dress_advance");
-        }
-    }
-} catch (Exception $e) {
-    // Table creation/modification failed
-}
+$selectedMonth = isset($_GET['month']) ? (int)$_GET['month'] : date('n');
+$selectedYear = isset($_GET['year']) ? (int)$_GET['year'] : date('Y');
 
 // Get units based on selected client
 $units = [];
@@ -157,28 +99,23 @@ if ($selectedClient) {
         $stmt = $db->prepare("SELECT id, name, unit_code FROM units WHERE client_id = ? AND is_active = 1 ORDER BY name");
         $stmt->execute([$selectedClient]);
         $units = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    } catch (Exception $e) {
-        // Table doesn't exist
-    }
+    } catch (Exception $e) {}
 }
 
 // Get employees and their advances when unit is selected
 $employees = [];
 if ($selectedUnit && isset($_GET['load'])) {
-    // Get employees for this unit
+    // Get employees for this unit - removed designation and worker_category
     $stmt = $db->prepare("
-        SELECT e.id, e.employee_code, e.full_name, e.designation, e.worker_category,
-               ess.basic_wage, ess.gross_salary
+        SELECT e.id, e.employee_code, e.full_name
         FROM employees e
-        LEFT JOIN employee_salary_structures ess ON e.id = ess.employee_id AND ess.effective_to IS NULL
-        WHERE e.unit_id = ? AND e.status = 'approved'
+        WHERE e.unit_id = ? AND e.status != 'pending_hr_verification'
         ORDER BY e.employee_code
     ");
     $stmt->execute([$selectedUnit]);
     $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
-    // Get existing advances if any
-    // Note: employee_advances.employee_id stores employee_code (INT)
+    // Get existing advances if any - employee_id is VARCHAR UUID
     foreach ($employees as &$emp) {
         try {
             $stmt = $db->prepare("
@@ -186,7 +123,7 @@ if ($selectedUnit && isset($_GET['load'])) {
                 FROM employee_advances
                 WHERE employee_id = ? AND month = ? AND year = ?
             ");
-            $stmt->execute([$emp['employee_code'], $selectedMonth, $selectedYear]);
+            $stmt->execute([$emp['id'], $selectedMonth, $selectedYear]);
             $existing = $stmt->fetch(PDO::FETCH_ASSOC);
             if ($existing) {
                 $emp['adv1'] = $existing['adv1'];
@@ -209,6 +146,18 @@ if ($selectedUnit && isset($_GET['load'])) {
     unset($emp);
 }
 ?>
+
+<style>
+/* Remove spinner arrows from number inputs */
+.no-spinner::-webkit-outer-spin-button,
+.no-spinner::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.no-spinner[type=number] {
+    -moz-appearance: textfield;
+}
+</style>
 
 <div class="row">
     <div class="col-12">
@@ -315,9 +264,7 @@ if ($selectedUnit && isset($_GET['load'])) {
                                 <tr>
                                     <th style="width: 50px;">#</th>
                                     <th style="width: 100px;">Emp Code</th>
-                                    <th style="width: 180px;">Employee Name</th>
-                                    <th style="width: 120px;">Designation</th>
-                                    <th style="width: 100px;">Category</th>
+                                    <th style="width: 250px;">Employee Name</th>
                                     <th style="width: 100px;" class="text-center bg-primary text-white">Adv 1<br><small>(Rs)</small></th>
                                     <th style="width: 100px;" class="text-center bg-primary text-white">Adv 2<br><small>(Rs)</small></th>
                                     <th style="width: 100px;" class="text-center bg-warning text-dark">Office Adv<br><small>(Rs)</small></th>
@@ -333,45 +280,43 @@ if ($selectedUnit && isset($_GET['load'])) {
                                 <tr>
                                     <td class="text-center"><?php echo $sr++; ?></td>
                                     <td>
-                                        <input type="hidden" name="employee_code[]" value="<?php echo $emp['employee_code']; ?>">
+                                        <input type="hidden" name="employee_code[]" value="<?php echo $emp['id']; ?>">
                                         <code><?php echo $emp['employee_code']; ?></code>
                                     </td>
                                     <td><?php echo sanitize($emp['full_name']); ?></td>
-                                    <td><?php echo sanitize($emp['designation']); ?></td>
-                                    <td><span class="badge bg-light text-dark"><?php echo sanitize($emp['worker_category']); ?></span></td>
                                     <td>
-                                        <input type="number" name="adv1[<?php echo $emp['employee_code']; ?>]" 
+                                        <input type="number" name="adv1[<?php echo $emp['id']; ?>]" 
                                                value="<?php echo $emp['adv1']; ?>" 
-                                               class="form-control form-control-sm text-end advance-input" 
-                                               min="0" step="1" data-row="<?php echo $emp['employee_code']; ?>">
+                                               class="form-control form-control-sm text-end advance-input no-spinner" 
+                                               min="0" data-row="<?php echo $emp['id']; ?>">
                                     </td>
                                     <td>
-                                        <input type="number" name="adv2[<?php echo $emp['employee_code']; ?>]" 
+                                        <input type="number" name="adv2[<?php echo $emp['id']; ?>]" 
                                                value="<?php echo $emp['adv2']; ?>" 
-                                               class="form-control form-control-sm text-end advance-input" 
-                                               min="0" step="1" data-row="<?php echo $emp['employee_code']; ?>">
+                                               class="form-control form-control-sm text-end advance-input no-spinner" 
+                                               min="0" data-row="<?php echo $emp['id']; ?>">
                                     </td>
                                     <td>
-                                        <input type="number" name="office_advance[<?php echo $emp['employee_code']; ?>]" 
+                                        <input type="number" name="office_advance[<?php echo $emp['id']; ?>]" 
                                                value="<?php echo $emp['office_advance']; ?>" 
-                                               class="form-control form-control-sm text-end advance-input" 
-                                               min="0" step="1" data-row="<?php echo $emp['employee_code']; ?>">
+                                               class="form-control form-control-sm text-end advance-input no-spinner" 
+                                               min="0" data-row="<?php echo $emp['id']; ?>">
                                     </td>
                                     <td>
-                                        <input type="number" name="dress_advance[<?php echo $emp['employee_code']; ?>]" 
+                                        <input type="number" name="dress_advance[<?php echo $emp['id']; ?>]" 
                                                value="<?php echo $emp['dress_advance']; ?>" 
-                                               class="form-control form-control-sm text-end advance-input" 
-                                               min="0" step="1" data-row="<?php echo $emp['employee_code']; ?>">
+                                               class="form-control form-control-sm text-end advance-input no-spinner" 
+                                               min="0" data-row="<?php echo $emp['id']; ?>">
                                     </td>
                                     <td>
-                                        <span class="fw-bold row-total" data-row="<?php echo $emp['employee_code']; ?>">0</span>
+                                        <span class="fw-bold row-total" data-row="<?php echo $emp['id']; ?>">0</span>
                                     </td>
                                 </tr>
                                 <?php endforeach; ?>
                             </tbody>
                             <tfoot class="table-light">
                                 <tr class="fw-bold">
-                                    <td colspan="5" class="text-end">TOTAL</td>
+                                    <td colspan="3" class="text-end">TOTAL</td>
                                     <td class="text-end" id="total-adv1">0</td>
                                     <td class="text-end" id="total-adv2">0</td>
                                     <td class="text-end" id="total-office">0</td>
@@ -440,9 +385,9 @@ function calculateRowTotal(rowId) {
     const inputs = document.querySelectorAll('.advance-input[data-row="' + rowId + '"]');
     let total = 0;
     inputs.forEach(input => {
-        total += parseFloat(input.value) || 0;
+        total += parseInt(input.value) || 0;
     });
-    document.querySelector('.row-total[data-row="' + rowId + '"]').textContent = total.toFixed(0);
+    document.querySelector('.row-total[data-row="' + rowId + '"]').textContent = total;
 }
 
 // Calculate column totals
@@ -450,23 +395,23 @@ function calculateColumnTotals() {
     let totalAdv1 = 0, totalAdv2 = 0, totalOffice = 0, totalDress = 0;
     
     document.querySelectorAll('[name^="adv1["]').forEach(input => {
-        totalAdv1 += parseFloat(input.value) || 0;
+        totalAdv1 += parseInt(input.value) || 0;
     });
     document.querySelectorAll('[name^="adv2["]').forEach(input => {
-        totalAdv2 += parseFloat(input.value) || 0;
+        totalAdv2 += parseInt(input.value) || 0;
     });
     document.querySelectorAll('[name^="office_advance["]').forEach(input => {
-        totalOffice += parseFloat(input.value) || 0;
+        totalOffice += parseInt(input.value) || 0;
     });
     document.querySelectorAll('[name^="dress_advance["]').forEach(input => {
-        totalDress += parseFloat(input.value) || 0;
+        totalDress += parseInt(input.value) || 0;
     });
     
-    document.getElementById('total-adv1').textContent = totalAdv1.toFixed(0);
-    document.getElementById('total-adv2').textContent = totalAdv2.toFixed(0);
-    document.getElementById('total-office').textContent = totalOffice.toFixed(0);
-    document.getElementById('total-dress').textContent = totalDress.toFixed(0);
-    document.getElementById('grand-total').textContent = (totalAdv1 + totalAdv2 + totalOffice + totalDress).toFixed(0);
+    document.getElementById('total-adv1').textContent = totalAdv1;
+    document.getElementById('total-adv2').textContent = totalAdv2;
+    document.getElementById('total-office').textContent = totalOffice;
+    document.getElementById('total-dress').textContent = totalDress;
+    document.getElementById('grand-total').textContent = totalAdv1 + totalAdv2 + totalOffice + totalDress;
 }
 
 // Add event listeners
