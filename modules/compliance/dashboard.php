@@ -19,7 +19,8 @@ if (!in_array($_SESSION['role_code'], ['admin', 'hr_executive'])) {
 $pageTitle = 'Compliance Dashboard';
 $page = 'compliance/dashboard';
 
-// Get monthly stats from$currentMonth = date('n');
+// Get monthly stats from payroll
+$currentMonth = date('n');
 $currentYear = date('Y');
 
 // Get payroll summary for statutory compliance
@@ -62,7 +63,7 @@ include '../../templates/header.php';
             <h1 class="page-title">
                 <i class="bi bi-shield-check me-2"></i>Compliance Dashboard
             </h1>
-            <p class="text-muted">Statutory compliance management andp>
+            <p class="text-muted">Statutory compliance management and monitoring</p>
         </div>
     </div>
 </div>

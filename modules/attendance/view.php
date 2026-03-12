@@ -19,8 +19,8 @@ $clients = $client->getList();
 $units = [];
 if ($clientFilter) {
     // Find client by name
-    $clientData = $db->prepare("SELECT id FROM clients WHERE name = ?");
-    $clientData->execute([$clientFilter]);
+    $clientData = $db->prepare("SELECT id FROM clients WHERE name = ? OR client_name = ?");
+    $clientData->execute([$clientFilter, $clientFilter]);
     $clientRow = $clientData->fetch(PDO::FETCH_ASSOC);
     if ($clientRow) {
         $units = $unit->getByClient($clientRow['id']);
@@ -32,12 +32,12 @@ $where = ["MONTH(a.attendance_date) = :month", "YEAR(a.attendance_date) = :year"
 $params = [':month' => $monthFilter, ':year' => $yearFilter];
 
 if (!empty($clientFilter)) {
-    $where[] = "e.client_name = :client";
+    $where[] = "COALESCE(c.name, c.client_name, e.client_name) = :client";
     $params[':client'] = $clientFilter;
 }
 
 if (!empty($unitFilter)) {
-    $where[] = "e.unit_name = :unit";
+    $where[] = "COALESCE(u.name, u.unit_name, e.unit_name) = :unit";
     $params[':unit'] = $unitFilter;
 }
 
@@ -56,6 +56,8 @@ $offset = ($page - 1) * $perPage;
 // Count total
 $countSql = "SELECT COUNT(*) as total FROM attendance a 
              LEFT JOIN employees e ON a.employee_id = e.employee_code 
+             LEFT JOIN clients c ON e.client_id = c.id
+             LEFT JOIN units u ON e.unit_id = u.id
              WHERE $whereClause";
 $countStmt = $db->prepare($countSql);
 $countStmt->execute(array_filter($params, fn($k) => $k !== ':limit' && $k !== ':offset', ARRAY_FILTER_USE_KEY));
@@ -63,11 +65,15 @@ $total = $countStmt->fetch(PDO::FETCH_ASSOC)['total'];
 
 // Get attendance data
 $sql = "SELECT a.*, 
-               e.full_name, e.employee_code, e.client_name, e.unit_name, e.designation
+               e.full_name, e.employee_code, e.designation,
+               COALESCE(c.name, c.client_name, e.client_name) as client_name,
+               COALESCE(u.name, u.unit_name, e.unit_name) as unit_name
         FROM attendance a 
         LEFT JOIN employees e ON a.employee_id = e.employee_code 
+        LEFT JOIN clients c ON e.client_id = c.id
+        LEFT JOIN units u ON e.unit_id = u.id
         WHERE $whereClause 
-        ORDER BY e.unit_name, e.full_name 
+        ORDER BY unit_name, e.full_name 
         LIMIT $perPage OFFSET $offset";
 
 $stmt = $db->prepare($sql);
@@ -85,6 +91,8 @@ $summarySql = "SELECT
                SUM(a.overtime_hours) as total_overtime
                FROM attendance a 
                LEFT JOIN employees e ON a.employee_id = e.employee_code 
+               LEFT JOIN clients c ON e.client_id = c.id
+               LEFT JOIN units u ON e.unit_id = u.id
                WHERE $whereClause";
 
 $summaryStmt = $db->prepare($summarySql);

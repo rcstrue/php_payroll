@@ -18,7 +18,7 @@ $periods = $db->query(
 
 // Get clients for filter
 $clients = $db->query(
-    "SELECT DISTINCT client_name FROM employees WHERE client_name IS NOT NULL AND client_name != '' ORDER BY client_name"
+    "SELECT DISTINCT COALESCE(c.name, c.client_name, e.client_name) as client_name FROM employees e LEFT JOIN clients c ON e.client_id = c.id WHERE e.client_name IS NOT NULL AND e.client_name != '' ORDER BY client_name"
 )->fetchAll(PDO::FETCH_ASSOC);
 
 // Build query for bank advice
@@ -26,12 +26,12 @@ $where = "pp.month = :month AND pp.year = :year";
 $params = ['month' => $month, 'year' => $year];
 
 if ($clientName) {
-    $where .= " AND e.client_name = :client_name";
+    $where .= " AND COALESCE(c.name, c.client_name, e.client_name) = :client_name";
     $params['client_name'] = $clientName;
 }
 
 if ($unitName) {
-    $where .= " AND e.unit_name = :unit_name";
+    $where .= " AND COALESCE(u.name, u.unit_name, e.unit_name) = :unit_name";
     $params['unit_name'] = $unitName;
 }
 
@@ -40,18 +40,20 @@ $sql = "SELECT
             e.employee_code,
             e.full_name,
             e.bank_name,
-            e.bank_account_number,
-            e.bank_ifsc_code,
+            COALESCE(e.account_number, e.bank_account_number) as bank_account_number,
+            COALESCE(e.ifsc_code, e.bank_ifsc_code) as bank_ifsc_code,
             p.net_salary,
-            e.client_name,
-            e.unit_name
+            COALESCE(c.name, c.client_name, e.client_name) as client_name,
+            COALESCE(u.name, u.unit_name, e.unit_name) as unit_name
         FROM payroll p
         JOIN employees e ON p.employee_id = e.employee_code
+        LEFT JOIN clients c ON e.client_id = c.id
+        LEFT JOIN units u ON e.unit_id = u.id
         JOIN payroll_periods pp ON p.payroll_period_id = pp.id
         WHERE {$where}
-        AND e.bank_account_number IS NOT NULL 
-        AND e.bank_account_number != ''
-        ORDER BY e.client_name, e.unit_name, e.full_name";
+        AND (e.account_number IS NOT NULL OR e.bank_account_number IS NOT NULL)
+        AND (e.account_number != '' OR e.bank_account_number != '')
+        ORDER BY client_name, unit_name, e.full_name";
 
 $stmt = $db->prepare($sql);
 $stmt->execute($params);
@@ -65,8 +67,10 @@ $totalEmployees = count($bankData);
 $units = [];
 if ($clientName) {
     $stmt = $db->prepare(
-        "SELECT DISTINCT unit_name FROM employees 
-         WHERE client_name = ? AND unit_name IS NOT NULL AND unit_name != '' 
+        "SELECT DISTINCT COALESCE(u.name, u.unit_name, e.unit_name) as unit_name FROM employees e 
+         LEFT JOIN units u ON e.unit_id = u.id
+         WHERE COALESCE(e.client_name, (SELECT name FROM clients WHERE id = e.client_id)) = ? 
+         AND (e.unit_name IS NOT NULL OR u.name IS NOT NULL) 
          ORDER BY unit_name"
     );
     $stmt->execute([$clientName]);
@@ -88,7 +92,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'excel') {
             $row['employee_code'],
             $row['full_name'],
             $row['bank_name'],
-            $row['bank_account_number'],
+            $row['bank_account_number'] ?? $row['account_number'],
             $row['bank_ifsc_code'],
             $row['net_salary']
         ]);

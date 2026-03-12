@@ -13,19 +13,19 @@ $unitFilter = isset($_GET['unit']) ? sanitize($_GET['unit']) : '';
 $statusFilter = isset($_GET['status']) ? sanitize($_GET['status']) : '';
 
 // Get clients for filter
-$clients = $db->query("SELECT DISTINCT client_name FROM employees WHERE client_name IS NOT NULL AND client_name != '' ORDER BY client_name")->fetchAll(PDO::FETCH_ASSOC);
+$clients = $db->query("SELECT DISTINCT COALESCE(c.name, c.client_name, e.client_name) as client_name FROM employees e LEFT JOIN clients c ON e.client_id = c.id WHERE e.client_name IS NOT NULL AND e.client_name != '' ORDER BY client_name")->fetchAll(PDO::FETCH_ASSOC);
 
 // Build query
 $where = "pp.month = :month AND pp.year = :year";
 $params = [':month' => $month, ':year' => $year];
 
 if ($clientFilter) {
-    $where .= " AND e.client_name = :client";
+    $where .= " AND COALESCE(c.name, c.client_name, e.client_name) = :client";
     $params[':client'] = $clientFilter;
 }
 
 if ($unitFilter) {
-    $where .= " AND e.unit_name = :unit";
+    $where .= " AND COALESCE(u.name, u.unit_name, e.unit_name) = :unit";
     $params[':unit'] = $unitFilter;
 }
 
@@ -35,13 +35,17 @@ if ($statusFilter) {
 }
 
 // Get payroll records
-$sql = "SELECT p.*, e.full_name, e.employee_code, e.client_name, e.unit_name, e.designation,
+$sql = "SELECT p.*, e.full_name, e.employee_code, e.designation,
+        COALESCE(c.name, c.client_name, e.client_name) as client_name,
+        COALESCE(u.name, u.unit_name, e.unit_name) as unit_name,
         pp.period_name
         FROM payroll p
         JOIN employees e ON p.employee_id = e.employee_code
+        LEFT JOIN clients c ON e.client_id = c.id
+        LEFT JOIN units u ON e.unit_id = u.id
         LEFT JOIN payroll_periods pp ON p.payroll_period_id = pp.id
         WHERE {$where}
-        ORDER BY e.client_name, e.unit_name, e.full_name";
+        ORDER BY client_name, unit_name, e.full_name";
 
 $stmt = $db->prepare($sql);
 $stmt->execute($params);
@@ -70,7 +74,7 @@ foreach ($payrollData as $row) {
 // Get units for filter
 $units = [];
 if ($clientFilter) {
-    $stmt = $db->prepare("SELECT DISTINCT unit_name FROM employees WHERE client_name = ? AND unit_name IS NOT NULL ORDER BY unit_name");
+    $stmt = $db->prepare("SELECT DISTINCT COALESCE(u.name, u.unit_name, e.unit_name) as unit_name FROM employees e LEFT JOIN units u ON e.unit_id = u.id WHERE COALESCE(e.client_name, (SELECT name FROM clients WHERE id = e.client_id)) = ? AND (e.unit_name IS NOT NULL OR u.name IS NOT NULL) ORDER BY unit_name");
     $stmt->execute([$clientFilter]);
     $units = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
@@ -302,7 +306,7 @@ $('#clientFilter').change(function() {
         $.get('index.php?page=api/units', {client_name: client}, function(data) {
             var options = '<option value="">All Units</option>';
             data.forEach(function(u) {
-                options += '<option value="' + u.name + '">' + u.name + '</option>';
+                options += '<option value="' + (u.unit_name || u.name) + '">' + (u.unit_name || u.name) + '</option>';
             });
             $('#unitFilter').html(options);
         }, 'json');

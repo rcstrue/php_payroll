@@ -174,12 +174,12 @@ $units = $unit->getAll($clientFilter ?: null, false);
                                 <tr>
                                     <td><?php echo sanitize($u['client_name'] ?? '-'); ?></td>
                                     <td><span class="badge bg-secondary"><?php echo sanitize($u['unit_code'] ?? '-'); ?></span></td>
-                                    <td><strong><?php echo sanitize($u['name']); ?></strong></td>
+                                    <td><strong><?php echo sanitize($u['unit_name'] ?? $u['name']); ?></strong></td>
                                     <td><?php echo sanitize($u['state'] ?? '-'); ?></td>
                                     <td><?php echo sanitize($u['city'] ?? '-'); ?></td>
                                     <td><?php echo sanitize($u['contact_person'] ?? '-'); ?></td>
                                     <td class="text-center">
-                                        <a href="index.php?page=employee/list&unit=<?php echo urlencode($u['name']); ?>">
+                                        <a href="index.php?page=employee/list&unit=<?php echo urlencode($u['unit_name'] ?? $u['name']); ?>">
                                             <span class="badge bg-success"><?php echo $u['employee_count'] ?? 0; ?></span>
                                         </a>
                                     </td>
@@ -394,7 +394,7 @@ $(document).ready(function() {
 function editUnit(u) {
     $('#edit_unit_id').val(u.id);
     $('#edit_client_id').val(u.client_id);
-    $('#edit_unit_name').val(u.name);
+    $('#edit_unit_name').val(u.unit_name || u.name);
     $('#edit_unit_code').val(u.unit_code || '');
     $('#edit_state').val(u.state || '');
     $('#edit_city').val(u.city || '');

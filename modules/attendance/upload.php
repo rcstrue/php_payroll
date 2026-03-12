@@ -5,8 +5,8 @@
 
 $pageTitle = 'Upload Attendance';
 
-// Get units
-$stmt = $db->query("SELECT u.id, u.name as unit_name, c.name as client_name FROM units u LEFT JOIN clients c ON u.client_id = c.id WHERE u.is_active = 1 ORDER BY c.name as client_name, u.name as unit_name");
+// Get units - use COALESCE to handle both 'name' and 'unit_name'/'client_name' columns
+$stmt = $db->query("SELECT u.id, COALESCE(u.name, u.unit_name) as unit_name, COALESCE(c.name, c.client_name) as client_name FROM units u LEFT JOIN clients c ON u.client_id = c.id WHERE u.is_active = 1 ORDER BY client_name, unit_name");
 $units = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Handle upload

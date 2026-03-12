@@ -12,26 +12,36 @@ $monthFilter = isset($_GET['month']) ? (int)$_GET['month'] : (int)date('m');
 $yearFilter = isset($_GET['year']) ? (int)$_GET['year'] : (int)date('Y');
 
 // Get clients for filter
-$clients = $db->query("SELECT DISTINCT client_name FROM employees WHERE client_name IS NOT NULL AND client_name != '' ORDER BY client_name")->fetchAll(PDO::FETCH_ASSOC);
+$clients = $db->query("SELECT DISTINCT COALESCE(c.name, c.client_name, e.client_name) as client_name FROM employees e LEFT JOIN clients c ON e.client_id = c.id WHERE e.client_name IS NOT NULL AND e.client_name != '' ORDER BY client_name")->fetchAll(PDO::FETCH_ASSOC);
+
+// Initialize units array
+$units = [];
 
 // Build query
 $where = "MONTH(a.attendance_date) = ? AND YEAR(a.attendance_date) = ?";
 $params = ['month' => $monthFilter, 'year' => $yearFilter];
 
 if ($clientFilter) {
-    $where .= " AND e.client_name = :client";
+    $where .= " AND COALESCE(c.name, c.client_name, e.client_name) = :client";
     $params['client'] = $clientFilter;
 }
 
 if ($unitFilter) {
-    $where .= " AND e.unit_name = :unit";
+    $where .= " AND COALESCE(u.name, u.unit_name, e.unit_name) = :unit";
     $params['unit'] = $unitFilter;
+}
+
+// Get units for selected client
+if ($clientFilter) {
+    $stmt = $db->prepare("SELECT DISTINCT COALESCE(u.name, u.unit_name, e.unit_name) as unit_name FROM employees e LEFT JOIN units u ON e.unit_id = u.id WHERE COALESCE(e.client_name, (SELECT name FROM clients WHERE id = e.client_id)) = ? AND e.unit_name IS NOT NULL AND e.unit_name != '' ORDER BY unit_name");
+    $stmt->execute([$clientFilter]);
+    $units = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
 // Get attendance summary
 $sql = "SELECT 
-    e.client_name,
-    e.unit_name,
+    COALESCE(c.name, c.client_name, e.client_name) as client_name,
+    COALESCE(u.name, u.unit_name, e.unit_name) as unit_name,
     COUNT(*) as total_records,
     SUM(CASE WHEN a.status = 'Present' THEN 1 ELSE 0 END) as present,
     SUM(CASE WHEN a.status = 'Absent' THEN 1 ELSE 0 END) as absent,
@@ -39,12 +49,14 @@ $sql = "SELECT
     SUM(a.overtime_hours) as total_ot
     FROM attendance a
     LEFT JOIN employees e ON a.employee_id = e.employee_code
+    LEFT JOIN clients c ON e.client_id = c.id
+    LEFT JOIN units u ON e.unit_id = u.id
     WHERE {$where}
-    GROUP BY e.client_name, e.unit_name";
+    GROUP BY COALESCE(c.name, c.client_name, e.client_name), COALESCE(u.name, u.unit_name, e.unit_name)";
 
 $stmt = $db->prepare($sql);
 $stmt->execute($params);
-$summary = $stmt->fetch(PDO::FETCH_ASSOC);
+$summary = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 <div class="row">
@@ -110,34 +122,41 @@ $summary = $stmt->fetch(PDO::FETCH_ASSOC);
                 
                 <!-- Summary Cards -->
                 <div class="row g-3 mb-4">
-                    <?php foreach ($summary as $client => $data): ?>
-                    <div class="col-md-3">
-                        <div class="card bg-light">
-                            <div class="card-body text-center py-3">
-                                <h6 class="text-muted mb-1"><?php echo sanitize($client['client_name']); ?></h6>
-                                <div class="row">
-                                    <div class="col-4">
-                                        <div class="border rounded p-2 text-center">
-                                            <small class="text-muted">Total</small>
-                                            <h5 class="mb-0"><?php echo number_format($data['total_records']); ?></h5>
+                    <?php if (!empty($summary)): ?>
+                        <?php foreach ($summary as $data): ?>
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center py-3">
+                                    <h6 class="text-muted mb-1"><?php echo sanitize($data['client_name'] ?? 'Unknown'); ?> - <?php echo sanitize($data['unit_name'] ?? 'Unknown'); ?></h6>
+                                    <div class="row">
+                                        <div class="col-4">
+                                            <div class="border rounded p-2 text-center">
+                                                <small class="text-muted">Total</small>
+                                                <h5 class="mb-0"><?php echo number_format($data['total_records'] ?? 0); ?></h5>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div class="col-4">
-                                        <div class="border rounded p-2 text-center bg-success bg-opacity-10">
-                                            <small class="text-success">Present</small>
-                                            <h5 class="mb-0 text-success"><?php echo number_format($data['present']); ?></h5>
+                                        <div class="col-4">
+                                            <div class="border rounded p-2 text-center bg-success bg-opacity-10">
+                                                <small class="text-success">Present</small>
+                                                <h5 class="mb-0 text-success"><?php echo number_format($data['present'] ?? 0); ?></h5>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div class="col-4">
-                                        <div class="border rounded p-2 text-center bg-danger bg-opacity-10">
-                                            <small class="text-danger">Absent</small>
-                                            <h5 class="mb-0 text-danger"><?php echo number_format($data['absent']); ?></h5>
+                                        <div class="col-4">
+                                            <div class="border rounded p-2 text-center bg-danger bg-opacity-10">
+                                                <small class="text-danger">Absent</small>
+                                                <h5 class="mb-0 text-danger"><?php echo number_format($data['absent'] ?? 0); ?></h5>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    <?php endforeach; ?>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <div class="col-12">
+                            <div class="alert alert-info">No attendance data found for the selected filters.</div>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>

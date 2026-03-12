@@ -51,6 +51,18 @@ class Database {
         }
     }
     
+    // Prepare statement (without executing)
+    public function prepare($sql) {
+        try {
+            $this->stmt = $this->pdo->prepare($sql);
+            return $this->stmt;
+        } catch (PDOException $e) {
+            $this->error = $e->getMessage();
+            error_log('Prepare Error: ' . $this->error . ' | SQL: ' . $sql);
+            throw $e;
+        }
+    }
+    
     // Get single row
     public function fetch($sql, $params = []) {
         $stmt = $this->query($sql, $params);
