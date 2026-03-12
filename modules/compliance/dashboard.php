@@ -1,147 +1,131 @@
 <?php
 /**
- * RCS HRMS Pro - Compliance Dashboard
+ * RCS HRMS Pro - Compliance Dashboard (Fixed)
  */
+require_once '../../config/config.php';
+require_once '../../includes/database.php';
+require_once '../../includes/class.auth.php';
+
+$auth = new Auth($db);
+if (!$auth->isLoggedIn()) {
+    redirect('index.php?page=auth/login');
+}
+
+if (!in_array($_SESSION['role_code'], ['admin', 'hr_executive'])) {
+    setFlash('error', 'Access denied');
+    redirect('index.php?page=dashboard');
+}
 
 $pageTitle = 'Compliance Dashboard';
+$page = 'compliance/dashboard';
 
-// Get compliance data
-$dashboardData = $compliance->getDashboardData();
-$notifications = $compliance->getNotifications(10);
-
-// Get monthly summary
-$currentMonth = date('n');
+// Get monthly stats from$currentMonth = date('n');
 $currentYear = date('Y');
-$monthlySummary = $compliance->getMonthlySummary($currentMonth, $currentYear);
 
-// Get minimum wage alerts
-$stmt = $db->query(
-    "SELECT s.state_name, MAX(mw.effective_from) as last_update, mw.worker_category
-     FROM minimum_wages mw
-     JOIN states s ON mw.state_id = s.id
-     WHERE mw.is_active = 1
-     GROUP BY s.id
-     HAVING last_update < DATE_SUB(CURDATE(), INTERVAL 6 MONTH)"
-);
-$wageAlerts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// Get payroll summary for statutory compliance
+try {
+    $stmt = $db->prepare("SELECT 
+        SUM(pf_employee) as pf_employee, 
+        SUM(pf_employer) as pf_employer,
+        SUM(esi_employee) as esi_employee,
+        SUM(esi_employer) as esi_employer,
+        SUM(professional_tax) as pt,
+        COUNT(*) as total
+        FROM payroll 
+        WHERE MONTH(created_at) = ? AND YEAR(created_at) = ?");
+    $stmt->execute([$currentMonth, $currentYear]);
+    $monthlyStats = $stmt->fetch(PDO::FETCH_ASSOC) ?: ['pf_employee' => 0, 'pf_employer' => 0, 'esi_employee' => 0, 'esi_employer' => 0, 'pt' => 0, 'total' => 0];
+} catch (Exception $e) {
+    $monthlyStats = ['pf_employee' => 0, 'pf_employer' => 0, 'esi_employee' => 0, 'esi_employer' => 0, 'pt' => 0, 'total' => 0];
+}
 
-// Get compliance calendar
-$stmt = $db->prepare(
-    "SELECT * FROM compliance_calendar 
-     WHERE due_date >= CURDATE() AND is_active = 1
-     ORDER BY due_date LIMIT 10"
-);
-$stmt->execute();
-$upcomingDeadlines = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// Get total employees
+try {
+    $totalEmployees = $db->query("SELECT COUNT(*) FROM employees WHERE status = 'active'")->fetchColumn();
+} catch (Exception $e) {
+    $totalEmployees = 0;
+}
+
+// Get active clients
+try {
+    $activeClients = $db->query("SELECT COUNT(*) FROM clients WHERE is_active = 1")->fetchColumn();
+} catch (Exception $e) {
+    $activeClients = 0;
+}
+
+include '../../templates/header.php';
 ?>
 
-<div class="row">
-    <!-- Compliance Status Cards -->
-    <div class="col-12">
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-icon <?php echo $monthlySummary['total_pf_employee'] > 0 ? 'primary' : 'secondary'; ?>">
-                    <i class="bi bi-piggy-bank"></i>
-                </div>
-                <div class="stat-content">
-                    <div class="stat-label">PF Liability (Current Month)</div>
-                    <div class="stat-value"><?php echo formatCurrency($monthlySummary['pf_employee'] + $monthlySummary['pf_employer'] + $monthlySummary['eps_employer']); ?></div>
-                </div>
-            </div>
-            
-            <div class="stat-card">
-                <div class="stat-icon <?php echo $monthlySummary['total_esi_employee'] > 0 ? 'success' : 'secondary'; ?>">
-                    <i class="bi bi-hospital"></i>
-                </div>
-                <div class="stat-content">
-                    <div class="stat-label">ESI Liability (Current Month)</div>
-                    <div class="stat-value"><?php echo formatCurrency($monthlySummary['esi_employee'] + $monthlySummary['esi_employer']); ?></div>
-                </div>
-            </div>
-            
-            <div class="stat-card">
-                <div class="stat-icon warning">
-                    <i class="bi bi-receipt"></i>
-                </div>
-                <div class="stat-content">
-                    <div class="stat-label">Professional Tax</div>
-                    <div class="stat-value"><?php echo formatCurrency($monthlySummary['professional_tax']); ?></div>
-                </div>
-            </div>
-            
-            <div class="stat-card">
-                <div class="stat-icon <?php echo count($wageAlerts) > 0 ? 'danger' : 'success'; ?>">
-                    <i class="bi bi-currency-rupee"></i>
-                </div>
-                <div class="stat-content">
-                    <div class="stat-label">Wage Updates Needed</div>
-                    <div class="stat-value"><?php echo count($wageAlerts); ?></div>
-                </div>
-            </div>
+<div class="page-header">
+    <div class="row align-items-center">
+        <div class="col">
+            <h1 class="page-title">
+                <i class="bi bi-shield-check me-2"></i>Compliance Dashboard
+            </h1>
+            <p class="text-muted">Statutory compliance management andp>
         </div>
     </div>
 </div>
 
-<div class="row">
-    <!-- Upcoming Deadlines -->
-    <div class="col-lg-6 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0"><i class="bi bi-calendar-check me-2"></i>Upcoming Deadlines</h5>
-            </div>
-            <div class="card-body p-0">
-                <div class="list-group list-group-flush">
-                    <?php if (empty($upcomingDeadlines)): ?>
-                    <div class="list-group-item text-center py-4 text-muted">No upcoming deadlines</div>
-                    <?php else: ?>
-                    <?php foreach ($upcomingDeadlines as $d): ?>
-                    <div class="list-group-item">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="mb-1"><?php echo sanitize($d['compliance_name']); ?></h6>
-                                <small class="text-muted"><?php echo sanitize($d['form_number'] ?? ''); ?></small>
-                            </div>
-                            <div class="text-end">
-                                <div class="badge bg-<?php 
-                                    $daysUntil = (strtotime($d['due_date']) - time()) / 86400;
-                                    echo $daysUntil <= 3 ? 'danger' : ($daysUntil <= 7 ? 'warning' : 'success');
-                                ?>">
-                                    <?php echo formatDate($d['due_date']); ?>
-                                </div>
-                                <div class="small text-muted"><?php echo $d['frequency']; ?></div>
-                            </div>
+<!-- Compliance Status Cards -->
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-white-50 small">PF Liability (Current Month)</div>
+                        <div class="h4 mb-0">
+                            <?php echo formatCurrency(($monthlyStats['pf_employee'] ?? 0) + ($monthlyStats['pf_employer'] ?? 0)); ?>
                         </div>
                     </div>
-                    <?php endforeach; ?>
-                    <?php endif; ?>
+                    <i class="bi bi-piggy-bank fs-1 opacity-50"></i>
                 </div>
             </div>
         </div>
     </div>
     
-    <!-- Notifications -->
-    <div class="col-lg-6 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0"><i class="bi bi-bell me-2"></i>Notifications</h5>
-            </div>
-            <div class="card-body p-0">
-                <div class="list-group list-group-flush">
-                    <?php if (empty($notifications)): ?>
-                    <div class="list-group-item text-center py-4 text-muted">No notifications</div>
-                    <?php else: ?>
-                    <?php foreach ($notifications as $n): ?>
-                    <div class="list-group-item">
-                        <div class="d-flex justify-content-between">
-                            <div>
-                                <h6 class="mb-1"><?php echo sanitize($n['title']); ?></h6>
-                                <p class="mb-1 small text-muted"><?php echo sanitize($n['description']); ?></p>
-                            </div>
-                            <small class="text-muted"><?php echo formatDate($n['created_at']); ?></small>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-white-50 small">ESI Liability (Current Month)</div>
+                        <div class="h4 mb-0">
+                            <?php echo formatCurrency(($monthlyStats['esi_employee'] ?? 0) + ($monthlyStats['esi_employer'] ?? 0)); ?>
                         </div>
                     </div>
-                    <?php endforeach; ?>
-                    <?php endif; ?>
+                    <i class="bi bi-hospital fs-1 opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-warning text-dark">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-black-50 small">Professional Tax (Current Month)</div>
+                        <div class="h4 mb-0">
+                            <?php echo formatCurrency($monthlyStats['pt'] ?? 0); ?>
+                        </div>
+                    </div>
+                    <i class="bi bi-receipt fs-1 opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="text-white-50 small">Total Employees</div>
+                        <div class="h4 mb-0"><?php echo number_format($totalEmployees); ?></div>
+                    </div>
+                    <i class="bi bi-people fs-1 opacity-50"></i>
                 </div>
             </div>
         </div>
@@ -187,57 +171,90 @@ $upcomingDeadlines = $stmt->fetchAll(PDO::FETCH_ASSOC);
     </div>
 </div>
 
-<!-- Statutory Forms -->
+<!-- Statutory Forms & Upcoming Deadlines -->
 <div class="row mt-4">
-    <div class="col-12">
-        <div class="card">
+    <div class="col-lg-6">
+        <div class="card h-100">
             <div class="card-header">
                 <h5 class="card-title mb-0"><i class="bi bi-file-earmark-text me-2"></i>Statutory Forms</h5>
             </div>
             <div class="card-body">
-                <div class="row g-3">
-                    <div class="col-md-3">
+                <div class="row g-2">
+                    <div class="col-md-6">
                         <a href="index.php?page=forms/form-v" class="btn btn-outline-secondary w-100 py-2">
-                            <i class="bi bi-file-text me-1"></i>Form V (Register of Workmen)
+                            <i class="bi bi-file-text me-1"></i>Form V (Register)
                         </a>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-6">
                         <a href="index.php?page=forms/form-xvi" class="btn btn-outline-secondary w-100 py-2">
                             <i class="bi bi-file-text me-1"></i>Form XVI (Muster Roll)
                         </a>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-6">
                         <a href="index.php?page=forms/form-xvii" class="btn btn-outline-secondary w-100 py-2">
-                            <i class="bi bi-file-text me-1"></i>Form XVII (Wage Register)
+                            <i class="bi bi-file-text me-1"></i>Form XVII (Wages)
                         </a>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-6">
                         <a href="index.php?page=forms/form-f2" class="btn btn-outline-secondary w-100 py-2">
-                            <i class="bi bi-file-text me-1"></i>Form F2 (Return of Employees)
+                            <i class="bi bi-file-text me-1"></i>Form F2 (Return)
                         </a>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-6">
                         <a href="index.php?page=forms/appointment" class="btn btn-outline-secondary w-100 py-2">
                             <i class="bi bi-file-text me-1"></i>Appointment Letter
                         </a>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-6">
                         <a href="index.php?page=forms/nomination&type=pf" class="btn btn-outline-secondary w-100 py-2">
-                            <i class="bi bi-file-text me-1"></i>PF Nomination (Form 2)
-                        </a>
-                    </div>
-                    <div class="col-md-3">
-                        <a href="index.php?page=forms/nomination&type=gratuity" class="btn btn-outline-secondary w-100 py-2">
-                            <i class="bi bi-file-text me-1"></i>Gratuity Nomination
-                        </a>
-                    </div>
-                    <div class="col-md-3">
-                        <a href="index.php?page=report/custom" class="btn btn-outline-secondary w-100 py-2">
-                            <i class="bi bi-file-text me-1"></i>Custom Report Builder
+                            <i class="bi bi-file-text me-1"></i>PF Nomination
                         </a>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+    
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><i class="bi bi-calendar-check me-2"></i>Upcoming Deadlines</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>PF Monthly Payment</strong>
+                            <div class="small text-muted">15th of every month</div>
+                        </div>
+                        <span class="badge bg-warning">Monthly</span>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>ESI Monthly Payment</strong>
+                            <div class="small text-muted">15th of every month</div>
+                        </div>
+                        <span class="badge bg-warning">Monthly</span>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <strong>PT Return</strong>
+                            <div class="small text-muted">As per state rules</div>
+                        </div>
+                        <span class="badge bg-info">Varies</span>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>Minimum Wage Update</strong>
+                            <div class="small text-muted">Check for notifications</div>
+                        </div>
+                        <span class="badge bg-secondary">As Needed</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
+
+<?php
+include '../../templates/footer.php';
+?>

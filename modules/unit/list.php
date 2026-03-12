@@ -30,10 +30,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         // Check for duplicate unit code
         if (!empty($unitCode)) {
-            $exists = $db->fetch(
-                "SELECT id FROM units WHERE unit_code = :code",
-                ['code' => $unitCode]
-            );
+            $stmt = $db->prepare("SELECT id FROM units WHERE unit_code = ?");
+            $stmt->execute([$unitCode]);
+            $exists = $stmt->fetch(PDO::FETCH_ASSOC);
             if ($exists) {
                 setFlash('error', "Unit code '$unitCode' already exists! Please use a different code.");
                 redirect('index.php?page=unit/list');
@@ -72,10 +71,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         // Check for duplicate unit code (exclude current unit)
         if (!empty($unitCode)) {
-            $exists = $db->fetch(
-                "SELECT id FROM units WHERE unit_code = :code AND id != :id",
-                ['code' => $unitCode, 'id' => $_POST['unit_id']]
-            );
+            $stmt = $db->prepare("SELECT id FROM units WHERE unit_code = ? AND id != ?");
+            $stmt->execute([$unitCode, $_POST['unit_id']]);
+            $exists = $stmt->fetch(PDO::FETCH_ASSOC);
             if ($exists) {
                 setFlash('error', "Unit code '$unitCode' already exists! Please use a different code.");
                 redirect('index.php?page=unit/list');
