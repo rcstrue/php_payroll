@@ -1,0 +1,52 @@
+# Local configuration - DO NOT COMMIT THIS FILE
+config/config.local.php
+
+# Git internal folders - DO NOT UPLOAD TO FTP
+.git/
+.git-rewrite/
+.gitattributes
+.gitmodules
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+
+# IDE
+.idea/
+.vscode/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Uploads (keep structure, ignore content)
+uploads/*
+!uploads/.gitkeep
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Database backups
+*.sql.gz
+*.sql.bz2
+backups/
+
+# Cache
+cache/
+
+# Dependencies
+node_modules/
+.next/
+
