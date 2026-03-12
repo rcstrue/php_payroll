@@ -177,6 +177,221 @@
                 </li>
                 <?php endif; ?>
                 
+                <!-- Deployments (Manpower Supplier) -->
+                <?php if (in_array($_SESSION['role_code'], ['admin', 'hr_executive', 'manager'])): ?>
+                <li class="sidebar-item has-submenu <?php echo strpos($page, 'deployment') === 0 ? 'open' : ''; ?>">
+                    <a href="#" class="sidebar-link">
+                        <i class="bi bi-geo-alt"></i>
+                        <span>Deployments</span>
+                        <i class="bi bi-chevron-down sidebar-arrow"></i>
+                    </a>
+                    <ul class="sidebar-submenu">
+                        <li><a href="index.php?page=deployment/list" class="<?php echo $page == 'deployment/list' ? 'active' : ''; ?>">All Deployments</a></li>
+                        <li><a href="index.php?page=deployment/add" class="<?php echo $page == 'deployment/add' ? 'active' : ''; ?>">New Deployment</a></li>
+                    </ul>
+                </li>
+                <?php endif; ?>
+                
+                <!-- Requisitions (Manpower Supplier) -->
+                <?php if (in_array($_SESSION['role_code'], ['admin', 'hr_executive', 'manager'])): ?>
+                <li class="sidebar-item has-submenu <?php echo strpos($page, 'requisition') === 0 ? 'open' : ''; ?>">
+                    <a href="#" class="sidebar-link">
+                        <i class="bi bi-person-plus"></i>
+                        <span>Requisitions</span>
+                        <i class="bi bi-chevron-down sidebar-arrow"></i>
+                    </a>
+                    <ul class="sidebar-submenu">
+                        <li><a href="index.php?page=requisition/list" class="<?php echo $page == 'requisition/list' ? 'active' : ''; ?>">All Requisitions</a></li>
+                        <li><a href="index.php?page=requisition/add" class="<?php echo $page == 'requisition/add' ? 'active' : ''; ?>">New Requisition</a></li>
+                    </ul>
+                </li>
+                <?php endif; ?>
+                
+                <!-- Recruitment (Manpower Supplier) -->
+                <?php if (in_array($_SESSION['role_code'], ['admin', 'hr_executive', 'manager'])): ?>
+                <li class="sidebar-item has-submenu <?php echo strpos($page, 'recruitment') === 0 ? 'open' : ''; ?>">
+                    <a href="#" class="sidebar-link">
+                        <i class="bi bi-person-lines-fill"></i>
+                        <span>Recruitment</span>
+                        <i class="bi bi-chevron-down sidebar-arrow"></i>
+                    </a>
+                    <ul class="sidebar-submenu">
+                        <li><a href="index.php?page=recruitment/list" class="<?php echo $page == 'recruitment/list' ? 'active' : ''; ?>">All Candidates</a></li>
+                        <li><a href="index.php?page=recruitment/add" class="<?php echo $page == 'recruitment/add' ? 'active' : ''; ?>">Add Candidate</a></li>
+                    </ul>
+                </li>
+                <?php endif; ?>
+                
+                <!-- Client Billing (Manpower Supplier) -->
+                <?php if (in_array($_SESSION['role_code'], ['admin', 'hr_executive', 'manager'])): ?>
+                <li class="sidebar-item has-submenu <?php echo strpos($page, 'billing') === 0 ? 'open' : ''; ?>">
+                    <a href="#" class="sidebar-link">
+                        <i class="bi bi-receipt"></i>
+                        <span>Billing</span>
+                        <i class="bi bi-chevron-down sidebar-arrow"></i>
+                    </a>
+                    <ul class="sidebar-submenu">
+                        <li><a href="index.php?page=billing/list" class="<?php echo $page == 'billing/list' ? 'active' : ''; ?>">Invoices</a></li>
+                        <li><a href="index.php?page=billing/create" class="<?php echo $page == 'billing/create' ? 'active' : ''; ?>">Create Invoice</a></li>
+                    </ul>
+                </li>
+                <?php endif; ?>
+                
+                <!-- Timesheets (Manpower Supplier) -->
+                <?php if (in_array($_SESSION['role_code'], ['admin', 'hr_executive', 'manager', 'supervisor'])): ?>
+                <li class="sidebar-item has-submenu <?php echo strpos($page, 'timesheet') === 0 ? 'open' : ''; ?>">
+                    <a href="#" class="sidebar-link">
+                        <i class="bi bi-table"></i>
+                        <span>Timesheets</span>
+                        <i class="bi bi-chevron-down sidebar-arrow"></i>
+                    </a>
+                    <ul class="sidebar-submenu">
+                        <li><a href="index.php?page=timesheet/list" class="<?php echo $page == 'timesheet/list' ? 'active' : ''; ?>">All Timesheets</a></li>
+                        <li><a href="index.php?page=timesheet/create" class="<?php echo $page == 'timesheet/create' ? 'active' : ''; ?>">Create Timesheet</a></li>
+                    </ul>
+                </li>
+                <?php endif; ?>
+                
+                <!-- Rate Cards (Manpower Supplier) -->
+                <?php if (in_array($_SESSION['role_code'], ['admin', 'hr_executive'])): ?>
+                <li class="sidebar-item has-submenu <?php echo strpos($page, 'ratecard') === 0 ? 'open' : ''; ?>">
+                    <a href="#" class="sidebar-link">
+                        <i class="bi bi-currency-rupee"></i>
+                        <span>Rate Cards</span>
+                        <i class="bi bi-chevron-down sidebar-arrow"></i>
+                    </a>
+                    <ul class="sidebar-submenu">
+                        <li><a href="index.php?page=ratecard/list" class="<?php echo $page == 'ratecard/list' ? 'active' : ''; ?>">All Rate Cards</a></li>
+                        <li><a href="index.php?page=ratecard/add" class="<?php echo $page == 'ratecard/add' ? 'active' : ''; ?>">Add Rate Card</a></li>
+                    </ul>
+                </li>
+                <?php endif; ?>
+                
+                <!-- Client Feedback -->
+                <?php if (in_array($_SESSION['role_code'], ['admin', 'hr_executive', 'manager'])): ?>
+                <li class="sidebar-item <?php echo $page == 'feedback/list' ? 'active' : ''; ?>">
+                    <a href="index.php?page=feedback/list" class="sidebar-link">
+                        <i class="bi bi-star"></i>
+                        <span>Client Feedback</span>
+                    </a>
+                </li>
+                <?php endif; ?>
+                
+                <!-- Assets -->
+                <?php if (in_array($_SESSION['role_code'], ['admin', 'hr_executive', 'manager'])): ?>
+                <li class="sidebar-item has-submenu <?php echo strpos($page, 'assets') === 0 ? 'open' : ''; ?>">
+                    <a href="#" class="sidebar-link">
+                        <i class="bi bi-box-seam"></i>
+                        <span>Assets</span>
+                        <i class="bi bi-chevron-down sidebar-arrow"></i>
+                    </a>
+                    <ul class="sidebar-submenu">
+                        <li><a href="index.php?page=assets/list" class="<?php echo $page == 'assets/list' ? 'active' : ''; ?>">All Assets</a></li>
+                        <li><a href="index.php?page=assets/issue" class="<?php echo $page == 'assets/issue' ? 'active' : ''; ?>">Issue Asset</a></li>
+                    </ul>
+                </li>
+                <?php endif; ?>
+                
+                <!-- Deployments (Manpower Supplier) -->
+                <?php if (in_array($_SESSION['role_code'], ['admin', 'hr_executive', 'manager'])): ?>
+                <li class="sidebar-item has-submenu <?php echo strpos($page, 'deployment') === 0 ? 'open' : ''; ?>">
+                    <a href="#" class="sidebar-link">
+                        <i class="bi bi-geo-alt"></i>
+                        <span>Deployments</span>
+                        <i class="bi bi-chevron-down sidebar-arrow"></i>
+                    </a>
+                    <ul class="sidebar-submenu">
+                        <li><a href="index.php?page=deployment/list" class="<?php echo $page == 'deployment/list' ? 'active' : ''; ?>">All Deployments</a></li>
+                        <li><a href="index.php?page=deployment/add" class="<?php echo $page == 'deployment/add' ? 'active' : ''; ?>">New Deployment</a></li>
+                    </ul>
+                </li>
+                <?php endif; ?>
+                
+                <!-- Requisitions (Manpower Supplier) -->
+                <?php if (in_array($_SESSION['role_code'], ['admin', 'hr_executive', 'manager'])): ?>
+                <li class="sidebar-item has-submenu <?php echo strpos($page, 'requisition') === 0 ? 'open' : ''; ?>">
+                    <a href="#" class="sidebar-link">
+                        <i class="bi bi-person-plus"></i>
+                        <span>Requisitions</span>
+                        <i class="bi bi-chevron-down sidebar-arrow"></i>
+                    </a>
+                    <ul class="sidebar-submenu">
+                        <li><a href="index.php?page=requisition/list" class="<?php echo $page == 'requisition/list' ? 'active' : ''; ?>">All Requisitions</a></li>
+                        <li><a href="index.php?page=requisition/add" class="<?php echo $page == 'requisition/add' ? 'active' : ''; ?>">New Requisition</a></li>
+                    </ul>
+                </li>
+                <?php endif; ?>
+                
+                <!-- Recruitment (Manpower Supplier) -->
+                <?php if (in_array($_SESSION['role_code'], ['admin', 'hr_executive', 'manager'])): ?>
+                <li class="sidebar-item has-submenu <?php echo strpos($page, 'recruitment') === 0 ? 'open' : ''; ?>">
+                    <a href="#" class="sidebar-link">
+                        <i class="bi bi-person-lines-fill"></i>
+                        <span>Recruitment</span>
+                        <i class="bi bi-chevron-down sidebar-arrow"></i>
+                    </a>
+                    <ul class="sidebar-submenu">
+                        <li><a href="index.php?page=recruitment/list" class="<?php echo $page == 'recruitment/list' ? 'active' : ''; ?>">All Candidates</a></li>
+                        <li><a href="index.php?page=recruitment/add" class="<?php echo $page == 'recruitment/add' ? 'active' : ''; ?>">Add Candidate</a></li>
+                    </ul>
+                </li>
+                <?php endif; ?>
+                
+                <!-- Client Billing (Manpower Supplier) -->
+                <?php if (in_array($_SESSION['role_code'], ['admin', 'hr_executive', 'manager'])): ?>
+                <li class="sidebar-item has-submenu <?php echo strpos($page, 'billing') === 0 ? 'open' : ''; ?>">
+                    <a href="#" class="sidebar-link">
+                        <i class="bi bi-receipt"></i>
+                        <span>Billing</span>
+                        <i class="bi bi-chevron-down sidebar-arrow"></i>
+                    </a>
+                    <ul class="sidebar-submenu">
+                        <li><a href="index.php?page=billing/list" class="<?php echo $page == 'billing/list' ? 'active' : ''; ?>">Invoices</a></li>
+                        <li><a href="index.php?page=billing/create" class="<?php echo $page == 'billing/create' ? 'active' : ''; ?>">Create Invoice</a></li>
+                        <li><a href="index.php?page=ratecard/list" class="<?php echo $page == 'ratecard/list' ? 'active' : ''; ?>">Rate Cards</a></li>
+                    </ul>
+                </li>
+                <?php endif; ?>
+                
+                <!-- Timesheets (Manpower Supplier) -->
+                <?php if (in_array($_SESSION['role_code'], ['admin', 'hr_executive', 'manager', 'supervisor'])): ?>
+                <li class="sidebar-item has-submenu <?php echo strpos($page, 'timesheet') === 0 ? 'open' : ''; ?>">
+                    <a href="#" class="sidebar-link">
+                        <i class="bi bi-table"></i>
+                        <span>Timesheets</span>
+                        <i class="bi bi-chevron-down sidebar-arrow"></i>
+                    </a>
+                    <ul class="sidebar-submenu">
+                        <li><a href="index.php?page=timesheet/list" class="<?php echo $page == 'timesheet/list' ? 'active' : ''; ?>">All Timesheets</a></li>
+                    </ul>
+                </li>
+                <?php endif; ?>
+                
+                <!-- Client Feedback (Manpower Supplier) -->
+                <?php if (in_array($_SESSION['role_code'], ['admin', 'hr_executive', 'manager'])): ?>
+                <li class="sidebar-item <?php echo $page == 'feedback/list' ? 'active' : ''; ?>">
+                    <a href="index.php?page=feedback/list" class="sidebar-link">
+                        <i class="bi bi-star"></i>
+                        <span>Client Feedback</span>
+                    </a>
+                </li>
+                <?php endif; ?>
+                
+                <!-- Assets -->
+                <?php if (in_array($_SESSION['role_code'], ['admin', 'hr_executive', 'manager'])): ?>
+                <li class="sidebar-item has-submenu <?php echo strpos($page, 'assets') === 0 ? 'open' : ''; ?>">
+                    <a href="#" class="sidebar-link">
+                        <i class="bi bi-box-seam"></i>
+                        <span>Assets</span>
+                        <i class="bi bi-chevron-down sidebar-arrow"></i>
+                    </a>
+                    <ul class="sidebar-submenu">
+                        <li><a href="index.php?page=assets/list" class="<?php echo $page == 'assets/list' ? 'active' : ''; ?>">All Assets</a></li>
+                        <li><a href="index.php?page=assets/issue" class="<?php echo $page == 'assets/issue' ? 'active' : ''; ?>">Issue Asset</a></li>
+                    </ul>
+                </li>
+                <?php endif; ?>
+                
                 <!-- Reports -->
                 <li class="sidebar-item has-submenu <?php echo strpos($page, 'report') === 0 ? 'open' : ''; ?>">
                     <a href="#" class="sidebar-link">
