@@ -15,8 +15,8 @@ $filters = [
     'search' => $_GET['search'] ?? ''
 ];
 
-// Handle export - this runs before header.php when called via index.php export handler
-if (isset($isExportRequest) || isset($_GET['export'])) {
+// Handle export - check if we can set headers (export should be handled before header.php)
+if ((isset($isExportRequest) || isset($_GET['export'])) && !headers_sent()) {
     // Get all employees for export (no pagination)
     $result = $employee->getAll($filters, 1, 10000);
     $exportData = $result['data'];

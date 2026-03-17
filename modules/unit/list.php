@@ -28,17 +28,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'add') {
         $unitCode = sanitize($_POST['unit_code'] ?? '');
         
-        // Check for duplicate unit code
-        if (!empty($unitCode)) {
-            $stmt = $db->prepare("SELECT id FROM units WHERE unit_code = ?");
-            $stmt->execute([$unitCode]);
-            $exists = $stmt->fetch(PDO::FETCH_ASSOC);
-            if ($exists) {
-                setFlash('error', "Unit code '$unitCode' already exists! Please use a different code.");
-                redirect('index.php?page=unit/list');
+        // Auto-generate unit code if empty
+        if (empty($unitCode)) {
+            try {
+                $stmt = $db->query("SELECT unit_code FROM units WHERE unit_code IS NOT NULL AND unit_code != '' ORDER BY id DESC LIMIT 1");
+                $lastUnit = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                if ($lastUnit && !empty($lastUnit['unit_code'])) {
+                    if (preg_match('/(\d+)$/', $lastUnit['unit_code'], $matches)) {
+                        $num = (int)$matches[1] + 1;
+                        $prefix = preg_replace('/\d+$/', '', $lastUnit['unit_code']);
+                        if (empty($prefix)) $prefix = 'UNT';
+                        $unitCode = $prefix . str_pad($num, 3, '0', STR_PAD_LEFT);
+                    } else {
+                        $unitCode = 'UNT001';
+                    }
+                } else {
+                    $unitCode = 'UNT001';
+                }
+            } catch (Exception $e) {
+                $unitCode = 'UNT001';
             }
-        } else {
-            setFlash('error', 'Unit Code is required!');
+        }
+        
+        // Check for duplicate unit code
+        $stmt = $db->prepare("SELECT id FROM units WHERE unit_code = ?");
+        $stmt->execute([$unitCode]);
+        $exists = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($exists) {
+            setFlash('error', "Unit code '$unitCode' already exists! Please use a different code.");
             redirect('index.php?page=unit/list');
         }
         
@@ -236,12 +254,12 @@ $units = $unit->getAll($clientFilter ?: null, false);
                     <div class="row">
                         <div class="col-md-8 mb-3">
                             <label class="form-label required">Unit Name</label>
-                            <input type="text" class="form-control" name="unit_name" required>
+                            <input type="text" class="form-control" name="unit_name" id="add_unit_name" required>
                         </div>
                         <div class="col-md-4 mb-3">
-                            <label class="form-label required">Unit Code</label>
-                            <input type="text" class="form-control" name="unit_code" required>
-                            <small class="text-muted">Auto-generated if empty</small>
+                            <label class="form-label">Unit Code</label>
+                            <input type="text" class="form-control" name="unit_code" id="add_unit_code" placeholder="Auto-generated">
+                            <small class="text-muted">Leave blank to auto-generate</small>
                         </div>
                     </div>
                     <div class="row">
@@ -384,22 +402,30 @@ $(document).ready(function() {
     
     // Auto-generate unit code when add modal opens
     $('#addUnitModal').on('shown.bs.modal', function() {
+        // Clear the form
+        $('#add_unit_name').val('');
+        $('#add_unit_code').val('');
+        $('#add_client_id').val('');
+        
+        // Generate unit code
         generateUnitCode();
     });
 });
 
 // Generate next unit code via AJAX
 function generateUnitCode() {
-    const clientId = $('#add_client_id').val();
-    
     $.ajax({
         url: 'index.php?page=api/next-unit-code',
         method: 'GET',
-        data: { client_id: clientId },
+        dataType: 'json',
         success: function(response) {
-            if (response.unit_code) {
-                $('input[name="unit_code"]').val(response.unit_code);
+            if (response.success && response.unit_code) {
+                $('#add_unit_code').val(response.unit_code);
             }
+        },
+        error: function() {
+            // Default code if API fails
+            $('#add_unit_code').val('UNT001');
         }
     });
 }

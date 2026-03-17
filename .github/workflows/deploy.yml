@@ -17,7 +17,7 @@ jobs:
 
       - name: Generate version info
         run: |
-          echo "Version: 2.1.0" > build-info.txt
+          echo "Version: 2.1.1" > build-info.txt
           echo "Last Update: $(TZ='Asia/Kolkata' date '+%d %b %Y %H:%M IST')" >> build-info.txt
 
       - name: Deploy via FTP
@@ -26,7 +26,7 @@ jobs:
           server: ${{ secrets.FTP_HOST }}
           username: ${{ secrets.FTP_USER }}
           password: ${{ secrets.FTP_PASS }}
-          server-dir: /php_payroll/
+          server-dir: /hrms/
           local-dir: ./
           exclude: |
             .git/**
