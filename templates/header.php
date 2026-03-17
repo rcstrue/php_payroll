@@ -453,14 +453,21 @@
         <div class="sidebar-footer">
             <div class="sidebar-footer-version" style="font-size:11px; line-height:1.4;">
                 <?php
-                $file = dirname(__DIR__) . '/hrms/build-info.txt';
+                // Try multiple possible locations for build-info.txt
+                $file = APP_ROOT . '/build-info.txt';
+                if (!file_exists($file)) {
+                    $file = dirname(__DIR__) . '/build-info.txt';
+                }
+                if (!file_exists($file)) {
+                    $file = $_SERVER['DOCUMENT_ROOT'] . '/hrms/build-info.txt';
+                }
 
                 if (file_exists($file)) {
                     $lines = file($file);
                     echo htmlspecialchars(trim($lines[0])) . "<br>"; // Version
                     echo htmlspecialchars(trim($lines[1])); // Last Update
                 } else {
-                    echo "Version 2.0.0";
+                    echo "Version 2.1.0";
                 }
                 ?>
             </div>
