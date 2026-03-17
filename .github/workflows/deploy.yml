@@ -15,6 +15,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Generate version info
+        run: |
+          echo "Version: 2.1.0" > build-info.txt
+          echo "Last Update: $(TZ='Asia/Kolkata' date '+%d %b %Y %H:%M IST')" >> build-info.txt
+
       - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@4.3.0
         with:
