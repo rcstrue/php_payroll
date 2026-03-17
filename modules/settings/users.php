@@ -272,8 +272,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <input type="hidden" name="user_id" id="delete_user_id">
 </form>
 
-<script>
-function editUser(user) {
+<?php
+$inlineJS = <<<'JS'
+// Global functions for onclick handlers
+window.editUser = function(user) {
     $('#edit_user_id').val(user.id);
     $('#edit_username').val(user.username);
     $('#edit_email').val(user.email);
@@ -283,12 +285,13 @@ function editUser(user) {
     $('#edit_phone').val(user.phone);
     $('#edit_is_active').prop('checked', user.is_active == 1);
     new bootstrap.Modal('#editUserModal').show();
-}
+};
 
-function deleteUser(userId) {
+window.deleteUser = function(userId) {
     if (confirm('Are you sure you want to delete this user?')) {
         $('#delete_user_id').val(userId);
         $('#deleteForm').submit();
     }
-}
-</script>
+};
+JS;
+?>

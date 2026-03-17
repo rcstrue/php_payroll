@@ -680,8 +680,8 @@ function calculateGross() {
 
 $('#basic_wage, #da, #hra, input[name="conveyance"], input[name="medical_allowance"], input[name="special_allowance"], input[name="other_allowance"]').on('input', calculateGross);
 
-// Filter units by client
-function filterUnits() {
+// Filter units by client - Must be on window for onclick access
+window.filterUnits = function() {
     const clientId = $('#client_id').val();
     const clientOption = $('#client_id option:selected');
     const clientName = clientOption.data('name') || '';
@@ -704,13 +704,13 @@ function filterUnits() {
         $('#unit_id').val('');
         $('#unit_name').val('');
     }
-}
+};
 
-function updateUnitName() {
+window.updateUnitName = function() {
     const unitOption = $('#unit_id option:selected');
     const unitName = unitOption.data('name') || '';
     $('#unit_name').val(unitName);
-}
+};
 
 // Initialize on page load
 $(document).ready(function() {

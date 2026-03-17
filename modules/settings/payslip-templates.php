@@ -301,8 +301,10 @@ $defaultTemplateHtml = '<!DOCTYPE html>
     <input type="hidden" name="template_id" id="delete_template_id">
 </form>
 
-<script>
-function editTemplate(t) {
+<?php
+$inlineJS = <<<'JS'
+// Global functions for onclick handlers
+window.editTemplate = function(t) {
     $('#edit_template_id').val(t.id);
     $('#edit_template_name').val(t.template_name);
     $('#edit_template_code').val(t.template_code || '');
@@ -311,12 +313,13 @@ function editTemplate(t) {
     $('#edit_isActive').prop('checked', t.is_active == 1);
     $('#edit_isDefault').prop('checked', t.is_default == 1);
     new bootstrap.Modal('#editTemplateModal').show();
-}
+};
 
-function deleteTemplate(id) {
+window.deleteTemplate = function(id) {
     if (confirm('Are you sure you want to delete this template?')) {
         $('#delete_template_id').val(id);
         $('#deleteForm').submit();
     }
-}
-</script>
+};
+JS;
+?>

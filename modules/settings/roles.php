@@ -408,8 +408,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <input type="hidden" name="role_id" id="delete_role_id">
 </form>
 
-<script>
-function editRole(role) {
+<?php
+$inlineJS = <<<'JS'
+// Global functions for onclick handlers
+window.editRole = function(role) {
     $('#edit_role_id').val(role.id);
     $('#edit_role_name').val(role.role_name);
     $('#edit_role_code_display').val(role.role_code);
@@ -432,30 +434,30 @@ function editRole(role) {
     }
     
     new bootstrap.Modal('#editRoleModal').show();
-}
+};
 
-function deleteRole(roleId, roleName) {
+window.deleteRole = function(roleId, roleName) {
     if (confirm('Are you sure you want to delete the role "' + roleName + '"?\n\nThis action cannot be undone.')) {
         $('#delete_role_id').val(roleId);
         $('#deleteForm').submit();
     }
-}
+};
 
-function selectAllPermissions() {
+window.selectAllPermissions = function() {
     $('#addRoleForm input[type="checkbox"][name^="permissions"]').prop('checked', true);
-}
+};
 
-function deselectAllPermissions() {
+window.deselectAllPermissions = function() {
     $('#addRoleForm input[type="checkbox"][name^="permissions"]').prop('checked', false);
-}
+};
 
-function selectAllEditPermissions() {
+window.selectAllEditPermissions = function() {
     $('#editRoleForm input[type="checkbox"][name^="permissions"]').prop('checked', true);
-}
+};
 
-function deselectAllEditPermissions() {
+window.deselectAllEditPermissions = function() {
     $('#editRoleForm input[type="checkbox"][name^="permissions"]').prop('checked', false);
-}
+};
 
 // Validate role code format on add form
 $('#addRoleForm').on('submit', function(e) {
@@ -465,4 +467,5 @@ $('#addRoleForm').on('submit', function(e) {
         alert('Role code must contain only lowercase letters and underscores.');
     }
 });
-</script>
+JS;
+?>

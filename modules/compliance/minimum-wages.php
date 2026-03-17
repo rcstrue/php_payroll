@@ -297,7 +297,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 </div>
 
-<script>
+<?php
+$inlineJS = <<<'JS'
 // Calculate totals
 $('#basic_per_day, #da_per_day').on('input', function() {
     const basic = parseFloat($('#basic_per_day').val()) || 0;
@@ -309,8 +310,8 @@ $('#basic_per_day, #da_per_day').on('input', function() {
     $('#da_per_month').val((da * 26).toFixed(2));
 });
 
-// Edit wage
-function editWage(data) {
+// Global function for onclick handler
+window.editWage = function(data) {
     $('#edit_wage_id').val(data.id);
     $('#edit_basic_day').val(data.basic_per_day);
     $('#edit_da_day').val(data.da_per_day);
@@ -318,7 +319,7 @@ function editWage(data) {
     $('#edit_total_month').val(data.total_per_month);
     $('#edit_effective_from').val(data.effective_from);
     new bootstrap.Modal('#editWageModal').show();
-}
+};
 
 // Load zones based on state
 $('#wage_state_id').on('change', function() {
@@ -336,4 +337,5 @@ $('#wage_state_id').on('change', function() {
         });
     }
 });
-</script>
+JS;
+?>

@@ -163,12 +163,14 @@ $summary = $stmt->fetchAll(PDO::FETCH_ASSOC);
     </div>
 </div>
 
-<script>
-function exportReport() {
+<?php
+$inlineJS = <<<'JS'
+// Global function for onclick handler
+window.exportReport = function() {
     var params = new URLSearchParams(window.location.search);
     params.set('export', 'excel');
     window.location.href = 'index.php?' + params.toString();
-}
+};
 
 $(document).ready(function() {
     $('#clientFilter').change(function() {
@@ -186,4 +188,5 @@ $(document).ready(function() {
         }
     });
 });
-</script>
+JS;
+?>

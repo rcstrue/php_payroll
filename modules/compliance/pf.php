@@ -419,9 +419,11 @@ include '../../templates/header.php';
     </div>
 </div>
 
+<?php
+$extraJS = <<<'JS'
 <script>
-// Preview ECR content
-function previewECR() {
+// Global function for onclick handler
+window.previewECR = function() {
     // Generate preview via AJAX or show from current data
     let previewContent = `#ERS:<?php echo $company['pf_establishment_id'] ?? 'GJXXX123456789'; ?>~01~<?php echo str_pad($month, 2, '0', STR_PAD_LEFT); ?>~<?php echo $year; ?>
 
@@ -432,7 +434,7 @@ UAN: <?php echo $row['uan_number'] ?? $row['employee_code']; ?> | Name: <?php ec
 
     document.getElementById('ecrPreviewContent').textContent = previewContent;
     new bootstrap.Modal('#ecrPreviewModal').show();
-}
+};
 
 $(document).ready(function() {
     $('#pfTable').DataTable({
@@ -442,7 +444,6 @@ $(document).ready(function() {
     });
 });
 </script>
-
 <style>
 @media print {
     .btn, form, .modal { display: none !important; }
@@ -450,5 +451,7 @@ $(document).ready(function() {
     .table { font-size: 10pt; }
 }
 </style>
+JS;
 
-<?php include '../../templates/footer.php'; ?>
+include '../../templates/footer.php';
+?>

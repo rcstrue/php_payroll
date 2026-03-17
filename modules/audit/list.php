@@ -15,8 +15,7 @@ if ($userFilter) { $where .= " AND user_id = ?"; $params['user_id'] = $userFilte
 if ($dateFrom) { $where .= " AND DATE(created_at) >= ?"; $params['date_from'] = $dateFrom; }
 if ($dateTo) { $where .= " AND DATE(created_at) <= ?"; $params['date_to'] = $dateTo; }
 
-$stmt = $db->prepare("SELECT al.*, u.username, u.first_name
- u.last_name
+$stmt = $db->prepare("SELECT al.*, u.username, u.first_name, u.last_name
         FROM audit_log al
         LEFT JOIN users u ON al.user_id = u.id
         $where
@@ -29,15 +28,14 @@ $stmt->execute($params);
 $total = $stmt->fetchColumn();
 
 $modules = $db->query("SELECT DISTINCT module FROM audit_log WHERE module IS NOT NULL ORDER BY module")->fetchAll(PDO::FETCH_COLUMN);
-$users = $db->query("SELECT DISTINCT u.id, u.username, u.first_name
- u.last_name FROM users u INNER JOIN audit_log al ON al.user_id = u.id ORDER BY u.username")->fetchAll(PDO::FETCH_ASSOC);
+$users = $db->query("SELECT DISTINCT u.id, u.username, u.first_name, u.last_name FROM users u INNER JOIN audit_log al ON al.user_id = u.id ORDER BY u.username")->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 <div class="row">
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h4 class="mb-0"><i class="bi bi-clock-history me-2"></i>Audit Trail</h4>
-            <button onclick="exportAuditLog()" class="btn btn-outline-primary"><i class="bi bi-download me-1"></i>Export}
+            <button onclick="exportAuditLog()" class="btn btn-outline-primary"><i class="bi bi-download me-1"></i>Export</button>
         </div>
         
         <div class="card mb-4">
@@ -92,7 +90,7 @@ $users = $db->query("SELECT DISTINCT u.id, u.username, u.first_name
                                 <td><small class="text-muted"><?php echo sanitize($log['ip_address']); ?></small></td>
                                 <td>
                                     <?php if ($log['new_values']): ?>
-                                    <button class="btn btn-sm btn-outline-info" onclick="showDetails(<?php echo htmlspecialchars(json_encode($log), ?>')"><i class="bi bi-eye"></i></button>
+                                    <button class="btn btn-sm btn-outline-info" onclick='showDetails(<?php echo htmlspecialchars(json_encode($log)); ?>)'><i class="bi bi-eye"></i></button>
                                     <?php endif; ?>
                                 </td>
                             </tr>
@@ -113,12 +111,15 @@ $users = $db->query("SELECT DISTINCT u.id, u.username, u.first_name
     </div></div>
 </div>
 
-<script>
-function showDetails(log) {
+<?php
+$inlineJS = <<<'JS'
+// Global functions for onclick handlers
+window.showDetails = function(log) {
     document.getElementById('detailsContent').innerHTML = '<pre>' + JSON.stringify(log, null, 2) + '</pre>';
     new bootstrap.Modal(document.getElementById('detailsModal')).show();
-}
-function exportAuditLog() {
+};
+window.exportAuditLog = function() {
     window.location.href = 'index.php?page=audit/list&export=csv';
-}
-</script>
+};
+JS;
+?>

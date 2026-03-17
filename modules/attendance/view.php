@@ -339,7 +339,8 @@ $statuses = ['Present', 'Absent', 'Weekly Off', 'Holiday', 'Paid Leave', 'Unpaid
     </div>
 </div>
 
-<script>
+<?php
+$inlineJS = <<<'JS'
 // Load units when client changes
 $('#clientFilter').change(function() {
     var clientName = $(this).val();
@@ -356,8 +357,10 @@ $('#clientFilter').change(function() {
     }
 });
 
-function exportAttendance() {
+// Global function for onclick handler
+window.exportAttendance = function() {
     var params = $('#clientFilter').closest('form').serialize();
     window.location.href = 'index.php?page=attendance/export&' + params;
-}
-</script>
+};
+JS;
+?>
