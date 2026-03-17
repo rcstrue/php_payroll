@@ -67,6 +67,17 @@ if (strpos($page, 'api/') === 0) {
     exit;
 }
 
+// Handle Export requests (before header is included to avoid "headers already sent" errors)
+if (isset($_GET['export']) && $isLoggedIn) {
+    $exportFile = dirname(__FILE__) . "/modules/{$page}.php";
+    if (file_exists($exportFile)) {
+        // Set a flag so the module knows this is an export request before header
+        $isExportRequest = true;
+        include $exportFile;
+    }
+    exit;
+}
+
 // Route to appropriate page
 if (!$isLoggedIn) {
     $allowedPages = array('auth/login', 'auth/forgot-password', 'auth/reset-password');
