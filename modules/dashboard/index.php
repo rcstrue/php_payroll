@@ -354,8 +354,13 @@ $complianceSummary = $compliance->getSummary();
 <?php endif; ?>
 
 <?php
+// Pass PHP data to JavaScript BEFORE the inlineJS heredoc
+$unitWiseCountJson = json_encode($unitWiseCount);
+
 $inlineJS = <<<'JS'
 // Unit Distribution Chart
+const unitWiseCount = UNIT_WISE_COUNT_DATA; // Replaced with actual data below
+
 if (document.getElementById('unitChart') && typeof Chart !== 'undefined') {
     const unitCtx = document.getElementById('unitChart').getContext('2d');
     new Chart(unitCtx, {
@@ -381,7 +386,8 @@ if (document.getElementById('unitChart') && typeof Chart !== 'undefined') {
         }
     });
 }
-
-const unitWiseCount = <?php echo json_encode($unitWiseCount); ?>;
 JS;
+
+// Now replace the placeholder with actual data
+$inlineJS = str_replace('UNIT_WISE_COUNT_DATA', $unitWiseCountJson, $inlineJS);
 ?>
