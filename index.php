@@ -78,6 +78,15 @@ if (isset($_GET['export']) && $isLoggedIn) {
     exit;
 }
 
+// Handle Delete/Remove requests (before header is included)
+if (isset($_GET['page']) && strpos($_GET['page'], '/delete') !== false && $isLoggedIn) {
+    $deleteFile = dirname(__FILE__) . "/modules/{$_GET['page']}.php";
+    if (file_exists($deleteFile)) {
+        include $deleteFile;
+    }
+    exit;
+}
+
 // Route to appropriate page
 if (!$isLoggedIn) {
     $allowedPages = array('auth/login', 'auth/forgot-password', 'auth/reset-password');

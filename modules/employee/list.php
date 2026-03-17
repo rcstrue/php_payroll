@@ -6,9 +6,9 @@
 
 $pageTitle = 'Employees';
 
-// Get filters
+// Get filters - default to 'approved' (active) employees
 $filters = [
-    'status' => $_GET['status'] ?? '',
+    'status' => $_GET['status'] ?? 'approved', // Default to approved/active
     'client_id' => !empty($_GET['client_id']) ? $_GET['client_id'] : null,
     'unit_id' => !empty($_GET['unit_id']) ? $_GET['unit_id'] : null,
     'worker_category' => $_GET['worker_category'] ?? '',
@@ -180,10 +180,10 @@ try {
                     
                     <div class="col-md-2">
                         <select class="form-select" name="status">
-                            <option value="">All Status</option>
-                            <option value="Active" <?php echo $filters['status'] === 'Active' ? 'selected' : ''; ?>>Active</option>
-                            <option value="Pending" <?php echo $filters['status'] === 'Pending' ? 'selected' : ''; ?>>Pending</option>
-                            <option value="Inactive" <?php echo $filters['status'] === 'Inactive' ? 'selected' : ''; ?>>Inactive</option>
+                            <option value="approved" <?php echo $filters['status'] === 'approved' ? 'selected' : ''; ?>>Active</option>
+                            <option value="" <?php echo $filters['status'] === '' ? 'selected' : ''; ?>>All Status</option>
+                            <option value="pending" <?php echo $filters['status'] === 'pending' ? 'selected' : ''; ?>>Pending</option>
+                            <option value="removed" <?php echo $filters['status'] === 'removed' ? 'selected' : ''; ?>>Removed</option>
                         </select>
                     </div>
                     
@@ -310,9 +310,9 @@ try {
                                            class="btn btn-outline-secondary" title="Edit">
                                             <i class="bi bi-pencil"></i>
                                         </a>
-                                        <button type="button" class="btn btn-outline-danger" 
-                                                onclick="deleteEmployee('<?php echo $emp['id']; ?>')" title="Delete">
-                                            <i class="bi bi-trash"></i>
+                                        <button type="button" class="btn btn-outline-warning" 
+                                                onclick="removeEmployee('<?php echo $emp['id']; ?>')" title="Remove">
+                                            <i class="bi bi-person-x"></i>
                                         </button>
                                     </div>
                                 </td>
@@ -366,11 +366,11 @@ try {
 $extraJS = <<<'JS'
 <script>
 // Global functions for employee list page
-function deleteEmployee(id) {
-    if (confirm('Are you sure you want to delete this employee?')) {
+window.removeEmployee = function(id) {
+    if (confirm('Are you sure you want to remove this employee?\n\nThe employee will be hidden from the active list but data will be preserved in the database.')) {
         window.location.href = 'index.php?page=employee/delete&id=' + id;
     }
-}
+};
 
 function exportEmployees() {
     // Get current filter values

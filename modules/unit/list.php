@@ -382,16 +382,30 @@ $(document).ready(function() {
         order: [[0, 'asc'], [2, 'asc']]
     });
     
-    // Auto-generate unit code when client is selected in add modal
-    $('#add_client_id').change(function() {
-        const clientOption = $(this).find('option:selected');
-        if ($(this).val()) {
-            // Unit code will be auto-generated on server if empty
-        }
+    // Auto-generate unit code when add modal opens
+    $('#addUnitModal').on('shown.bs.modal', function() {
+        generateUnitCode();
     });
 });
 
-function editUnit(u) {
+// Generate next unit code via AJAX
+function generateUnitCode() {
+    const clientId = $('#add_client_id').val();
+    
+    $.ajax({
+        url: 'index.php?page=api/next-unit-code',
+        method: 'GET',
+        data: { client_id: clientId },
+        success: function(response) {
+            if (response.unit_code) {
+                $('input[name="unit_code"]').val(response.unit_code);
+            }
+        }
+    });
+}
+
+// Global functions for onclick handlers
+window.editUnit = function(u) {
     $('#edit_unit_id').val(u.id);
     $('#edit_client_id').val(u.client_id);
     $('#edit_unit_name').val(u.unit_name || u.name);
@@ -404,12 +418,12 @@ function editUnit(u) {
     $('#edit_phone').val(u.contact_phone || '');
     $('#edit_is_active').prop('checked', u.is_active == 1);
     new bootstrap.Modal('#editUnitModal').show();
-}
+};
 
-function deleteUnit(id) {
+window.deleteUnit = function(id) {
     if (confirm('Are you sure you want to delete this unit?')) {
         $('#delete_unit_id').val(id);
         $('#deleteForm').submit();
     }
-}
+};
 </script>
