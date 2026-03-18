@@ -97,7 +97,7 @@ if ($unitId) {
                     <h5 class="mb-3">MUSTER ROLL</h5>
                     <p class="mb-1"><strong>Principal Employer:</strong> <?php echo sanitize($unitDetails['client_name'] ?? ''); ?></p>
                     <p class="mb-1"><strong>Contractor:</strong> RCS TRUE FACILITIES PVT LTD</p>
-                    <p><strong>Month & Year:</strong> <?php echo $months[$month] . ' ' . $year; ?></p>
+                    <p><strong>Month & Year:</strong> <?php echo htmlspecialchars($months[$month] ?? '', ENT_QUOTES, 'UTF-8') . ' ' . htmlspecialchars($year, ENT_QUOTES, 'UTF-8'); ?></p>
                 </div>
                 
                 <!-- Muster Roll Table -->

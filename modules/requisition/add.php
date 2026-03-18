@@ -189,7 +189,7 @@ include '../../templates/header.php';
                         <div class="col-md-6">
                             <label class="form-label required">Designation/Position</label>
                             <input type="text" name="designation" class="form-control" 
-                                   value="<?php echo sanitize($requisition['designation']); ?>" 
+                                   value="<?php echo htmlspecialchars($requisition['designation'], ENT_QUOTES, 'UTF-8'); ?>" 
                                    placeholder="e.g., Security Guard, Housekeeping, Loader" required>
                         </div>
                         <div class="col-md-6">
@@ -239,7 +239,7 @@ include '../../templates/header.php';
                         <div class="col-md-4">
                             <label class="form-label required">Required By Date</label>
                             <input type="date" name="required_by_date" class="form-control" 
-                                   value="<?php echo sanitize($requisition['required_by_date']); ?>" required>
+                                   value="<?php echo htmlspecialchars($requisition['required_by_date'], ENT_QUOTES, 'UTF-8'); ?>" required>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Priority</label>
@@ -253,7 +253,7 @@ include '../../templates/header.php';
                         <div class="col-md-4">
                             <label class="form-label">Min. Qualification</label>
                             <input type="text" name="min_qualification" class="form-control" 
-                                   value="<?php echo $requisition['min_qualification']; ?>" placeholder="e.g., 10th Pass">
+                                   value="<?php echo htmlspecialchars($requisition['min_qualification'], ENT_QUOTES, 'UTF-8'); ?>" placeholder="e.g., 10th Pass">
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Min. Experience (Years)</label>
@@ -298,16 +298,16 @@ include '../../templates/header.php';
                         <div class="col-md-6">
                             <label class="form-label">Requested By</label>
                             <input type="text" name="requested_by" class="form-control" 
-                                   value="<?php echo sanitize($requisition['requested_by']); ?>" placeholder="Client contact person">
+                                   value="<?php echo htmlspecialchars($requisition['requested_by'], ENT_QUOTES, 'UTF-8'); ?>" placeholder="Client contact person">
                         </div>
                         <div class="col-12">
                             <label class="form-label">Special Requirements</label>
                             <textarea name="special_requirements" class="form-control" rows="2" 
-                                      placeholder="Any specific requirements like height, languages known, certifications, etc."><?php echo sanitize($requisition['special_requirements']); ?></textarea>
+                                      placeholder="Any specific requirements like height, languages known, certifications, etc."><?php echo htmlspecialchars($requisition['special_requirements'], ENT_QUOTES, 'UTF-8'); ?></textarea>
                         </div>
                         <div class="col-12">
                             <label class="form-label">Notes</label>
-                            <textarea name="notes" class="form-control" rows="2"><?php echo sanitize($requisition['notes']); ?></textarea>
+                            <textarea name="notes" class="form-control" rows="2"><?php echo htmlspecialchars($requisition['notes'], ENT_QUOTES, 'UTF-8'); ?></textarea>
                         </div>
                     </div>
                 </div>

@@ -93,8 +93,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $totalEE += $eeContribution;
                 $totalER += $erContribution;
                 
-                if ($emp['gender'] == 'male') $maleCount++;
-                else $femaleCount++;
+                if ($emp['gender'] == 'male') {
+                    $maleCount++;
+                } else {
+                    $femaleCount++;
+                }
             }
         }
         

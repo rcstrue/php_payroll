@@ -107,7 +107,9 @@ class Attendance {
             
             $employeeCode = trim($row[0] ?? '');
             
-            if (empty($employeeCode)) continue;
+            if (empty($employeeCode)) {
+                continue;
+            }
             
             // Get employee by employee_code
             $emp = $this->db->fetch(
@@ -124,7 +126,9 @@ class Attendance {
             for ($day = 1; $day <= 31; $day++) {
                 $status = trim($row[$day] ?? '');
                 
-                if (empty($status)) continue;
+                if (empty($status)) {
+                    continue;
+                }
                 
                 $date = sprintf('%04d-%02d-%02d', $year, $month, $day);
                 
@@ -191,7 +195,9 @@ class Attendance {
         while (($row = fgetcsv($handle)) !== false) {
             $employeeCode = trim($row[0] ?? '');
             
-            if (empty($employeeCode)) continue;
+            if (empty($employeeCode)) {
+                continue;
+            }
             
             // Get employee by employee_code
             $emp = $this->db->fetch(
@@ -208,7 +214,9 @@ class Attendance {
             for ($day = 1; $day <= 31; $day++) {
                 $status = trim($row[$day] ?? '');
                 
-                if (empty($status)) continue;
+                if (empty($status)) {
+                    continue;
+                }
                 
                 $date = sprintf('%04d-%02d-%02d', $year, $month, $day);
                 
@@ -287,7 +295,9 @@ class Attendance {
     // Get attendance by unit for a month
     public function getUnitAttendance($unitId, $month, $year) {
         $unit = $this->db->fetch("SELECT name FROM units WHERE id = :id", ['id' => $unitId]);
-        if (!$unit) return [];
+        if (!$unit) {
+            return [];
+        }
         
         // Get all employees in unit with their attendance
         return $this->db->fetchAll(
@@ -318,10 +328,18 @@ class Attendance {
             'created_at' => date('Y-m-d H:i:s')
         ];
         
-        if ($unitId) $data['unit_id'] = $unitId;
-        if ($inTime) $data['in_time'] = $inTime;
-        if ($outTime) $data['out_time'] = $outTime;
-        if ($remarks) $data['remarks'] = $remarks;
+        if ($unitId) {
+            $data['unit_id'] = $unitId;
+        }
+        if ($inTime) {
+            $data['in_time'] = $inTime;
+        }
+        if ($outTime) {
+            $data['out_time'] = $outTime;
+        }
+        if ($remarks) {
+            $data['remarks'] = $remarks;
+        }
         
         // Calculate working hours
         if ($inTime && $outTime) {

@@ -176,7 +176,7 @@ try {
                     <div class="col-md-2">
                         <input type="text" class="form-control" name="search" 
                                placeholder="Search by name, code, mobile..." 
-                               value="<?php echo sanitize($filters['search'] ?? ''); ?>">
+                               value="<?php echo htmlspecialchars($filters['search'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                     </div>
                     
                     <div class="col-md-2">

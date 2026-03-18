@@ -58,11 +58,11 @@ $users = $db->query("SELECT DISTINCT u.id, u.username, u.first_name, u.last_name
                     </div>
                     <div class="col-md-2">
                         <label class="form-label">From</label>
-                        <input type="date" class="form-control" name="date_from" value="<?php echo sanitize($dateFrom); ?>">
+                        <input type="date" class="form-control" name="date_from" value="<?php echo htmlspecialchars($dateFrom, ENT_QUOTES, 'UTF-8'); ?>">
                     </div>
                     <div class="col-md-2">
                         <label class="form-label">To</label>
-                        <input type="date" class="form-control" name="date_to" value="<?php echo sanitize($dateTo); ?>">
+                        <input type="date" class="form-control" name="date_to" value="<?php echo htmlspecialchars($dateTo, ENT_QUOTES, 'UTF-8'); ?>">
                     </div>
                     <div class="col-md-2">
                         <button type="submit" class="btn btn-primary">Filter</button>

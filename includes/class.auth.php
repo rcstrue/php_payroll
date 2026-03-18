@@ -129,7 +129,9 @@ class Auth {
     
     // Check if user has role level or higher
     public function hasRoleLevel($role) {
-        if (!isset($_SESSION['role_code'])) return false;
+        if (!isset($_SESSION['role_code'])) {
+            return false;
+        }
         
         $userLevel = $this->roleHierarchy[$_SESSION['role_code']] ?? 0;
         $requiredLevel = $this->roleHierarchy[$role] ?? 0;

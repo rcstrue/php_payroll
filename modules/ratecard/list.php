@@ -94,7 +94,7 @@ include '../../templates/header.php';
             <div class="col-md-4">
                 <label class="form-label">Designation</label>
                 <input type="text" name="designation" class="form-control" 
-                       value="<?php echo sanitize($designation_filter); ?>" placeholder="Search designation">
+                       value="<?php echo htmlspecialchars($designation_filter, ENT_QUOTES, 'UTF-8'); ?>" placeholder="Search designation">
             </div>
             <div class="col-md-4 d-flex align-items-end">
                 <button type="submit" class="btn btn-primary me-2">

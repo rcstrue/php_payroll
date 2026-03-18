@@ -3,8 +3,12 @@ $pageTitle = 'Compliance Calendar';
 $month = isset($_GET['month']) ? (int)$_GET['month'] : (int)date('m');
 $year = isset($_GET['year']) ? (int)$_GET['year'] : (int)date('Y');
 
-if ($month < 1 || $month > 12) $month = (int)date('m');
-if ($year < 2020 || $year > 2030) $year = (int)date('Y');
+if ($month < 1 || $month > 12) {
+    $month = (int)date('m');
+}
+if ($year < 2020 || $year > 2030) {
+    $year = (int)date('Y');
+}
 
 $firstDay = date('Y-m-01', strtotime("$year-$month-01"));
 $lastDay = date('Y-m-t', strtotime("$year-$month-01"));
@@ -14,7 +18,9 @@ $calendarItems->execute([$firstDay, $lastDay]);
 $items = $calendarItems->fetchAll(PDO::FETCH_ASSOC);
 
 $itemsByDate = [];
-foreach ($items as $item) { $itemsByDate[$item['due_date']][] = $item; }
+foreach ($items as $item) {
+    $itemsByDate[$item['due_date']][] = $item;
+}
 
 $monthNames = [1=>'January','February','March','April','May','June','July','August','September','October','November','December'];
 $prevMonth = $month - 1; $prevYear = $year; if ($prevMonth < 1) { $prevMonth = 12; $prevYear--; }

@@ -5,6 +5,10 @@
  * Updated for new database schema
  */
 
+// SQL query constants to avoid string duplication
+define('SQL_GET_UNIT_NAME', 'SELECT name FROM units WHERE id = :id');
+define('SQL_GET_PAYROLL_PERIOD', 'SELECT id FROM payroll_periods WHERE month = :month AND year = :year');
+
 class Compliance {
     private $db;
     
@@ -134,7 +138,7 @@ class Compliance {
         try {
             // Get period ID
             $period = $this->db->fetch(
-                "SELECT id FROM payroll_periods WHERE month = :month AND year = :year",
+                SQL_GET_PAYROLL_PERIOD,
                 ['month' => $month, 'year' => $year]
             );
             
@@ -179,7 +183,7 @@ class Compliance {
     public function getESIContributions($month, $year) {
         try {
             $period = $this->db->fetch(
-                "SELECT id FROM payroll_periods WHERE month = :month AND year = :year",
+                SQL_GET_PAYROLL_PERIOD,
                 ['month' => $month, 'year' => $year]
             );
             
@@ -218,7 +222,7 @@ class Compliance {
     public function getPTSummary($month, $year) {
         try {
             $period = $this->db->fetch(
-                "SELECT id FROM payroll_periods WHERE month = :month AND year = :year",
+                SQL_GET_PAYROLL_PERIOD,
                 ['month' => $month, 'year' => $year]
             );
             
@@ -567,7 +571,7 @@ class Compliance {
         
         try {
             $period = $this->db->fetch(
-                "SELECT id FROM payroll_periods WHERE month = :month AND year = :year",
+                SQL_GET_PAYROLL_PERIOD,
                 ['month' => $month, 'year' => $year]
             );
             
@@ -639,7 +643,9 @@ class Compliance {
     public function generateFormV($unitId, $month, $year) {
         // Get unit name
         $unit = $this->db->fetch("SELECT name FROM units WHERE id = :id", ['id' => $unitId]);
-        if (!$unit) return [];
+        if (!$unit) {
+            return [];
+        }
         
         return $this->db->fetchAll(
             "SELECT e.*, ess.basic_wage, ess.gross_salary
@@ -657,7 +663,9 @@ class Compliance {
     public function generateFormXVI($unitId, $month, $year) {
         // Get unit name
         $unit = $this->db->fetch("SELECT name FROM units WHERE id = :id", ['id' => $unitId]);
-        if (!$unit) return [];
+        if (!$unit) {
+            return [];
+        }
         
         // Try to get attendance data
         try {
@@ -694,11 +702,15 @@ class Compliance {
     public function generateFormXVII($unitId, $periodId) {
         // Get unit name
         $unit = $this->db->fetch("SELECT name FROM units WHERE id = :id", ['id' => $unitId]);
-        if (!$unit) return [];
+        if (!$unit) {
+            return [];
+        }
         
         // Get period details
         $period = $this->db->fetch("SELECT * FROM payroll_periods WHERE id = :id", ['id' => $periodId]);
-        if (!$period) return [];
+        if (!$period) {
+            return [];
+        }
         
         try {
             return $this->db->fetchAll(

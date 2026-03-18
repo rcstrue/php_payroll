@@ -198,7 +198,7 @@ $clients = $db->query("SELECT DISTINCT client_name FROM employees WHERE client_n
                     
                     <div class="mb-3">
                         <label class="form-label">Report Title</label>
-                        <input type="text" class="form-control" name="report_title" value="<?php echo sanitize($reportTitle); ?>">
+                        <input type="text" class="form-control" name="report_title" value="<?php echo htmlspecialchars($reportTitle, ENT_QUOTES, 'UTF-8'); ?>">
                     </div>
                     
                     <div class="mb-3">
@@ -347,7 +347,7 @@ $clients = $db->query("SELECT DISTINCT client_name FROM employees WHERE client_n
             <div class="card-header">
                 <h5 class="card-title mb-0">
                     <i class="bi bi-table me-2"></i>
-                    <?php echo sanitize($reportTitle); ?>
+                    <?php echo htmlspecialchars($reportTitle, ENT_QUOTES, 'UTF-8'); ?>
                     <?php if (!empty($reportData)): ?>
                     <span class="badge bg-secondary ms-2"><?php echo count($reportData); ?> records</span>
                     <?php endif; ?>
@@ -365,7 +365,7 @@ $clients = $db->query("SELECT DISTINCT client_name FROM employees WHERE client_n
                         <thead>
                             <tr>
                                 <?php foreach (array_keys($reportData[0]) as $col): ?>
-                                <th><?php echo ucwords(str_replace('_', ' ', $col)); ?></th>
+                                <th><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $col)), ENT_QUOTES, 'UTF-8'); ?></th>
                                 <?php endforeach; ?>
                             </tr>
                         </thead>

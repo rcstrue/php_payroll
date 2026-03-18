@@ -108,10 +108,18 @@ $fullName = trim(($emp['salutation'] ?? '') . ' ' . $emp['full_name'] . ' ' . ($
                 <th>Present Address</th>
                 <td><?php 
                     $addr = [];
-                    if ($emp['address']) $addr[] = sanitize($emp['address']);
-                    if ($emp['district']) $addr[] = sanitize($emp['district']);
-                    if ($emp['state']) $addr[] = sanitize($emp['state']);
-                    if ($emp['pin_code']) $addr[] = sanitize($emp['pin_code']);
+                    if ($emp['address']) {
+                        $addr[] = sanitize($emp['address']);
+                    }
+                    if ($emp['district']) {
+                        $addr[] = sanitize($emp['district']);
+                    }
+                    if ($emp['state']) {
+                        $addr[] = sanitize($emp['state']);
+                    }
+                    if ($emp['pin_code']) {
+                        $addr[] = sanitize($emp['pin_code']);
+                    }
                     echo implode(', ', $addr);
                 ?></td>
             </tr>

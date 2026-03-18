@@ -96,8 +96,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 ];
                 
                 $totalPT += $ptAmount;
-                if ($emp['gender'] == 'male') $maleCount++;
-                else $femaleCount++;
+                if ($emp['gender'] == 'male') {
+                    $maleCount++;
+                } else {
+                    $femaleCount++;
+                }
             }
         }
         

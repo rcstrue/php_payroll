@@ -102,7 +102,7 @@ $stats = [
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Search</label>
-                        <input type="text" name="search" class="form-control" value="<?php echo sanitize($searchQuery); ?>">
+                        <input type="text" name="search" class="form-control" value="<?php echo htmlspecialchars($searchQuery, ENT_QUOTES, 'UTF-8'); ?>">
                     </div>
                     <div class="col-md-3 d-flex align-items-end">
                         <button type="submit" class="btn btn-primary me-2">Search</button>

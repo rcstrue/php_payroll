@@ -169,7 +169,7 @@ include '../../templates/header.php';
                         <div class="col-md-6">
                             <label class="form-label required">Designation/Position</label>
                             <input type="text" name="designation" class="form-control" 
-                                   value="<?php echo sanitize($ratecard['designation']); ?>" 
+                                   value="<?php echo htmlspecialchars($ratecard['designation'], ENT_QUOTES, 'UTF-8'); ?>" 
                                    placeholder="e.g., Security Guard, Housekeeping" required>
                         </div>
                         <div class="col-md-3">
@@ -239,12 +239,12 @@ include '../../templates/header.php';
                         <div class="col-md-4">
                             <label class="form-label required">Effective From</label>
                             <input type="date" name="effective_from" class="form-control" 
-                                   value="<?php echo sanitize($ratecard['effective_from']); ?>" required>
+                                   value="<?php echo htmlspecialchars($ratecard['effective_from'], ENT_QUOTES, 'UTF-8'); ?>" required>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Effective To</label>
                             <input type="date" name="effective_to" class="form-control" 
-                                   value="<?php echo sanitize($ratecard['effective_to']); ?>">
+                                   value="<?php echo htmlspecialchars($ratecard['effective_to'], ENT_QUOTES, 'UTF-8'); ?>">
                         </div>
                     </div>
                 </div>

@@ -5,6 +5,10 @@
 
 $pageTitle = 'Compliance Reports';
 
+// SQL clause constants to avoid string duplication
+define('SQL_FILTER_CLIENT', ' AND e.client_id = :client_id');
+define('SQL_ORDER_BY_NAME', ' ORDER BY c.name, e.full_name');
+
 // Get filter parameters
 $month = isset($_GET['month']) ? (int)$_GET['month'] : (int)date('n');
 $year = isset($_GET['year']) ? (int)$_GET['year'] : (int)date('Y');
@@ -43,11 +47,11 @@ if ($reportType === 'pf') {
     $params = ['month' => $month, 'year' => $year];
     
     if ($clientId) {
-        $sql .= " AND e.client_id = :client_id";
+        $sql .= SQL_FILTER_CLIENT;
         $params['client_id'] = $clientId;
     }
     
-    $sql .= " ORDER BY c.name, e.full_name";
+    $sql .= SQL_ORDER_BY_NAME;
     
     $stmt = $db->prepare($sql);
     $stmt->execute($params);
@@ -79,11 +83,11 @@ if ($reportType === 'pf') {
     $params = ['month' => $month, 'year' => $year];
     
     if ($clientId) {
-        $sql .= " AND e.client_id = :client_id";
+        $sql .= SQL_FILTER_CLIENT;
         $params['client_id'] = $clientId;
     }
     
-    $sql .= " ORDER BY c.name, e.full_name";
+    $sql .= SQL_ORDER_BY_NAME;
     
     $stmt = $db->prepare($sql);
     $stmt->execute($params);
@@ -109,11 +113,11 @@ if ($reportType === 'pf') {
     $params = ['month' => $month, 'year' => $year];
     
     if ($clientId) {
-        $sql .= " AND e.client_id = :client_id";
+        $sql .= SQL_FILTER_CLIENT;
         $params['client_id'] = $clientId;
     }
     
-    $sql .= " ORDER BY c.name, e.full_name";
+    $sql .= SQL_ORDER_BY_NAME;
     
     $stmt = $db->prepare($sql);
     $stmt->execute($params);
@@ -139,11 +143,11 @@ if ($reportType === 'pf') {
     $params = [];
     
     if ($clientId) {
-        $sql .= " AND e.client_id = :client_id";
+        $sql .= SQL_FILTER_CLIENT;
         $params['client_id'] = $clientId;
     }
     
-    $sql .= " ORDER BY c.name, e.full_name";
+    $sql .= SQL_ORDER_BY_NAME;
     
     $stmt = $db->prepare($sql);
     $stmt->execute($params);

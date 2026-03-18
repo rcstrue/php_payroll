@@ -6,6 +6,9 @@
 
 $pageTitle = 'Units';
 
+// Define redirect URL constant to avoid string duplication
+define('UNIT_LIST_URL', 'index.php?page=unit/list');
+
 // Get filter
 $clientFilter = isset($_GET['client']) ? (int)$_GET['client'] : 0;
 
@@ -59,13 +62,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $exists = $stmt->fetch(PDO::FETCH_ASSOC);
         if ($exists) {
             setFlash('error', "Unit code '$unitCode' already exists! Please use a different code.");
-            redirect('index.php?page=unit/list');
+            redirect(UNIT_LIST_URL);
         }
         
         $state = sanitize($_POST['state'] ?? '');
         if (empty($state)) {
             setFlash('error', 'State is required!');
-            redirect('index.php?page=unit/list');
+            redirect(UNIT_LIST_URL);
         }
         
         $data = [
@@ -83,7 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $result = $unit->create($data);
         setFlash($result['success'] ? 'success' : 'error', $result['message']);
-        redirect('index.php?page=unit/list');
+        redirect(UNIT_LIST_URL);
     }
 
     if ($action === 'edit' && isset($_POST['unit_id'])) {
@@ -96,17 +99,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $exists = $stmt->fetch(PDO::FETCH_ASSOC);
             if ($exists) {
                 setFlash('error', "Unit code '$unitCode' already exists! Please use a different code.");
-                redirect('index.php?page=unit/list');
+                redirect(UNIT_LIST_URL);
             }
         } else {
             setFlash('error', 'Unit Code is required!');
-            redirect('index.php?page=unit/list');
+            redirect(UNIT_LIST_URL);
         }
         
         $state = sanitize($_POST['state'] ?? '');
         if (empty($state)) {
             setFlash('error', 'State is required!');
-            redirect('index.php?page=unit/list');
+            redirect(UNIT_LIST_URL);
         }
         
         $data = [
@@ -124,13 +127,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $result = $unit->update($_POST['unit_id'], $data);
         setFlash('success', 'Unit updated successfully!');
-        redirect('index.php?page=unit/list');
+        redirect(UNIT_LIST_URL);
     }
 
     if ($action === 'delete' && isset($_POST['unit_id'])) {
         $result = $unit->delete($_POST['unit_id']);
         setFlash($result['success'] ? 'success' : 'error', $result['message']);
-        redirect('index.php?page=unit/list');
+        redirect(UNIT_LIST_URL);
     }
 }
 
@@ -167,7 +170,7 @@ $units = $unit->getAll($clientFilter ?: null, false);
                     <div class="col-md-2">
                         <button type="submit" class="btn btn-sm btn-primary">Filter</button>
                         <?php if ($clientFilter): ?>
-                        <a href="index.php?page=unit/list" class="btn btn-sm btn-secondary">Clear</a>
+                        <a href="<?php echo UNIT_LIST_URL; ?>" class="btn btn-sm btn-secondary">Clear</a>
                         <?php endif; ?>
                     </div>
                 </form>
@@ -270,7 +273,7 @@ $units = $unit->getAll($clientFilter ?: null, false);
                             <select class="form-select" name="state" required>
                                 <option value="">Select State</option>
                                 <?php foreach ($statesList as $state): ?>
-                                <option value="<?php echo sanitize($state); ?>"><?php echo sanitize($state); ?></option>
+                                <option value="<?php echo htmlspecialchars($state, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($state, ENT_QUOTES, 'UTF-8'); ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
@@ -347,7 +350,7 @@ $units = $unit->getAll($clientFilter ?: null, false);
                             <select class="form-select" name="state" id="edit_state" required>
                                 <option value="">Select State</option>
                                 <?php foreach ($statesList as $state): ?>
-                                <option value="<?php echo sanitize($state); ?>"><?php echo sanitize($state); ?></option>
+                                <option value="<?php echo htmlspecialchars($state, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($state, ENT_QUOTES, 'UTF-8'); ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
