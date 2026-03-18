@@ -14,7 +14,7 @@ class Client {
     // Get all clients
     public function getList($activeOnly = true) {
         $sql = "SELECT c.id, c.client_code, c.name as client_name, c.contact_person, c.contact_email, 
-                       c.contact_phone, c.phone, c.city, c.state, c.address, c.gst_number,
+                       c.contact_phone, c.city, c.state, c.address, c.gst_number,
                        c.pincode, c.is_active,
                        (SELECT COUNT(*) FROM units u WHERE u.client_id = c.id) as unit_count,
                        (SELECT COUNT(*) FROM employees e WHERE e.client_id = c.id) as employee_count
