@@ -397,26 +397,31 @@ $units = $unit->getAll($clientFilter ?: null, false);
     <input type="hidden" name="unit_id" id="delete_unit_id">
 </form>
 
-<script>
-$(document).ready(function() {
-    $('#unitsTable').DataTable({
-        responsive: true,
-        pageLength: 25,
-        order: [[0, 'asc'], [2, 'asc']]
-    });
-    
-    // Auto-generate unit code when add modal opens
-    $('#addUnitModal').on('shown.bs.modal', function() {
-        // Clear the form
-        $('#add_unit_name').val('');
-        $('#add_unit_code').val('');
-        $('#add_client_id').val('');
-        
-        // Generate unit code
-        generateUnitCode();
-    });
+<?php
+// Page-specific JavaScript for DataTable initialization (wrapped in document.ready by footer)
+$inlineJS = <<<'JS'
+// Initialize DataTable
+$('#unitsTable').DataTable({
+    responsive: true,
+    pageLength: 25,
+    order: [[0, 'asc'], [2, 'asc']]
 });
 
+// Auto-generate unit code when add modal opens
+$('#addUnitModal').on('shown.bs.modal', function() {
+    // Clear the form
+    $('#add_unit_name').val('');
+    $('#add_unit_code').val('');
+    $('#add_client_id').val('');
+    
+    // Generate unit code
+    generateUnitCode();
+});
+JS;
+
+// Extra JS with script tags (output after jQuery loads)
+$extraJS = <<<'JS'
+<script>
 // Generate next unit code via AJAX
 function generateUnitCode() {
     $.ajax({
@@ -458,3 +463,5 @@ window.deleteUnit = function(id) {
     }
 };
 </script>
+JS;
+?>

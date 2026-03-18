@@ -2,6 +2,9 @@
 /**
  * RCS HRMS Pro - ESI Returns Generator
  * Generates ESI return file for ESIC portal upload
+ * 
+ * IMPORTANT: employees table does NOT have client_name or unit_name columns.
+ * Always use JOIN with clients and units tables to get client/unit names.
  */
 
 require_once '../../config/config.php';
@@ -29,12 +32,11 @@ $clientFilter = isset($_GET['client']) ? sanitize($_GET['client']) : '';
 // Get company details
 $company = $db->fetch("SELECT * FROM companies LIMIT 1");
 
-// Get clients for filter
+// Get clients for filter - use clients table directly
 $clients = $db->query(
     "SELECT DISTINCT c.name as client_name 
-     FROM employees e 
-     LEFT JOIN clients c ON e.client_id = c.id 
-     WHERE e.client_name IS NOT NULL AND e.client_name != '' 
+     FROM clients c 
+     WHERE c.is_active = 1 
      ORDER BY client_name"
 )->fetchAll(PDO::FETCH_ASSOC);
 

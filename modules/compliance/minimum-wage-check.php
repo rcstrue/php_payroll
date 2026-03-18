@@ -3,6 +3,9 @@
  * RCS HRMS Pro - Minimum Wage Validation Report
  * Compares employee salaries with state minimum wages
  * Shows alerts for non-compliant salaries
+ * 
+ * IMPORTANT: employees table does NOT have client_name or unit_name columns.
+ * Always use JOIN with clients and units tables to get client/unit names.
  */
 
 require_once '../../config/config.php';
@@ -27,12 +30,11 @@ $clientFilter = isset($_GET['client']) ? sanitize($_GET['client']) : '';
 $stateFilter = isset($_GET['state']) ? sanitize($_GET['state']) : '';
 $showOnlyViolations = isset($_GET['violations']) && $_GET['violations'] == '1';
 
-// Get clients for filter
+// Get clients for filter - use clients table directly
 $clients = $db->query(
     "SELECT DISTINCT c.name as client_name 
-     FROM employees e 
-     LEFT JOIN clients c ON e.client_id = c.id 
-     WHERE e.client_name IS NOT NULL AND e.client_name != '' 
+     FROM clients c 
+     WHERE c.is_active = 1 
      ORDER BY client_name"
 )->fetchAll(PDO::FETCH_ASSOC);
 
@@ -42,11 +44,12 @@ $states = $db->query(
 )->fetchAll(PDO::FETCH_ASSOC);
 
 // Get employees with their minimum wage comparison
+// IMPORTANT: Use JOINs for client_name and unit_name
 $sql = "SELECT 
             e.employee_code,
             e.full_name,
-            e.client_name,
-            e.unit_name,
+            c.name as client_name,
+            u.name as unit_name,
             e.state as employee_state,
             e.worker_category,
             e.skill_category,
@@ -58,6 +61,8 @@ $sql = "SELECT
             mw.zone,
             mw.effective_from as mw_effective
         FROM employees e
+        LEFT JOIN clients c ON e.client_id = c.id
+        LEFT JOIN units u ON e.unit_id = u.id
         LEFT JOIN employee_salary_structures ess ON e.id = ess.employee_id 
             AND (ess.effective_to IS NULL OR ess.effective_to >= CURDATE())
         LEFT JOIN minimum_wages mw ON (
@@ -75,7 +80,7 @@ $sql = "SELECT
 $params = [];
 
 if ($clientFilter) {
-    $sql .= " AND e.client_name = :client";
+    $sql .= " AND c.name = :client";
     $params[':client'] = $clientFilter;
 }
 
@@ -84,7 +89,7 @@ if ($stateFilter) {
     $params[':state'] = $stateFilter;
 }
 
-$sql .= " ORDER BY e.client_name, e.state, e.full_name";
+$sql .= " ORDER BY c.name, e.state, e.full_name";
 
 $stmt = $db->prepare($sql);
 $stmt->execute($params);

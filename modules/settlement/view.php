@@ -2,6 +2,9 @@
 /**
  * RCS HRMS Pro - Settlement View / Print
  * Detailed F&F Settlement view and print
+ * 
+ * IMPORTANT: employees table does NOT have client_name or unit_name columns.
+ * Always use JOIN with clients and units tables to get client/unit names.
  */
 
 require_once '../../config/config.php';
@@ -19,17 +22,18 @@ $page = 'settlement/view';
 // Get settlement ID
 $settlementId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
-// Get settlement details
+// Get settlement details - use JOINs for client_name and unit_name
 $settlement = $db->fetch(
     "SELECT s.*, e.employee_code, e.full_name, e.father_name, e.date_of_joining, 
             e.date_of_birth, e.designation, e.department, e.uan_number, e.esic_number,
             e.bank_name, e.account_number, e.ifsc_code,
             c.name as client_name,
-            e.unit_name, e.state, e.mobile_number,
+            u.name as unit_name, e.state, e.mobile_number,
             ess.basic_wage, ess.gross_salary
      FROM employee_settlements s
      JOIN employees e ON s.employee_id = e.id
      LEFT JOIN clients c ON e.client_id = c.id
+     LEFT JOIN units u ON e.unit_id = u.id
      LEFT JOIN employee_salary_structures ess ON e.id = ess.employee_id
      WHERE s.id = :id",
     ['id' => $settlementId]
