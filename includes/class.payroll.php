@@ -5,6 +5,11 @@
  * Updated for new database schema with proper statutory calculations
  */
 
+// SQL clause constants to avoid string duplication
+define('SQL_FILTER_UNIT_NAME', ' AND e.unit_name = :unit_name');
+define('SQL_FILTER_CLIENT_NAME', ' AND e.client_name = :client_name');
+define('SQL_WHERE_ID', 'id = :id');
+
 class Payroll {
     private $db;
     
@@ -140,7 +145,7 @@ class Payroll {
         if (!empty($filters['unit_id'])) {
             $unit = $this->db->fetch("SELECT name FROM units WHERE id = :id", ['id' => $filters['unit_id']]);
             if ($unit) {
-                $sql .= " AND e.unit_name = :unit_name";
+                $sql .= SQL_FILTER_UNIT_NAME;
                 $params['unit_name'] = $unit['name'];
             }
         }
@@ -148,7 +153,7 @@ class Payroll {
         if (!empty($filters['client_id'])) {
             $client = $this->db->fetch("SELECT name FROM clients WHERE id = :id", ['id' => $filters['client_id']]);
             if ($client) {
-                $sql .= " AND e.client_name = :client_name";
+                $sql .= SQL_FILTER_CLIENT_NAME;
                 $params['client_name'] = $client['name'];
             }
         }
@@ -208,7 +213,7 @@ class Payroll {
         $params = [];
         
         if (!empty($filters['unit_name'])) {
-            $sql .= " AND e.unit_name = :unit_name";
+            $sql .= SQL_FILTER_UNIT_NAME;
             $params['unit_name'] = $filters['unit_name'];
         }
         
@@ -599,7 +604,7 @@ class Payroll {
         $params = ['period_id' => $periodId];
         
         if (!empty($filters['unit_name'])) {
-            $sql .= " AND e.unit_name = :unit_name";
+            $sql .= SQL_FILTER_UNIT_NAME;
             $params['unit_name'] = $filters['unit_name'];
         }
         
