@@ -32,7 +32,9 @@
     <!-- Custom CSS -->
     <link href="assets/css/style.css" rel="stylesheet">
     
-    <?php if (isset($extraCSS)) echo $extraCSS; ?>
+    <?php if (isset($extraCSS)) {
+        echo $extraCSS;
+    } ?>
 </head>
 <body class="<?php echo $isLoggedIn ? '' : 'login-page'; ?>">
     
