@@ -6,6 +6,9 @@
  * NOTE: JavaScript pattern uses $inlineJS (wrapped in document.ready) and $extraJS (output after jQuery)
  * This ensures jQuery is loaded before any $() calls are made.
  * The editUnit and deleteUnit functions are defined as window.editUnit/deleteUnit for global onclick access.
+ *
+ * NOTE: Client dropdown uses $client->getList() which returns 'name' column (aliased from either 'name' or 'client_name')
+ * to handle different database schema configurations.
  */
 
 $pageTitle = 'Units';

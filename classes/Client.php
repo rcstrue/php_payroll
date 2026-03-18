@@ -19,9 +19,18 @@ class Client {
     }
     
     // Get all clients
+    // NOTE: Handles both 'name' and 'client_name' column names for compatibility
     public function getAll($activeOnly = true) {
+        // Check which column name exists in the table
+        try {
+            $columns = $this->db->fetchAll("SHOW COLUMNS FROM clients LIKE 'name'");
+            $nameCol = !empty($columns) ? 'name' : 'client_name';
+        } catch (Exception $e) {
+            $nameCol = 'name'; // Default fallback
+        }
+        
         // IMPORTANT: employees table uses client_id foreign key, not client_name
-        $sql = "SELECT c.*, 
+        $sql = "SELECT c.*, {$nameCol} as name,
                 (SELECT COUNT(*) FROM units WHERE client_id = c.id) as unit_count,
                 (SELECT COUNT(*) FROM employees e WHERE e.client_id = c.id AND e.status = 'approved') as employee_count
                 FROM clients c";
@@ -30,7 +39,7 @@ class Client {
             $sql .= " WHERE c.is_active = 1";
         }
         
-        $sql .= " ORDER BY c.name ASC";
+        $sql .= " ORDER BY c.{$nameCol} ASC";
         
         return $this->db->fetchAll($sql);
     }
@@ -122,9 +131,22 @@ class Client {
     }
     
     // Get client list for dropdowns
+    // NOTE: Handles both 'name' and 'client_name' column names for compatibility
     public function getList() {
+        // Check which column name exists in the table
+        try {
+            $columns = $this->db->fetchAll("SHOW COLUMNS FROM clients LIKE 'name'");
+            if (!empty($columns)) {
+                $nameCol = 'name';
+            } else {
+                $nameCol = 'client_name';
+            }
+        } catch (Exception $e) {
+            $nameCol = 'name'; // Default fallback
+        }
+        
         return $this->db->fetchAll(
-            "SELECT id, name, client_code FROM clients WHERE is_active = 1 ORDER BY name"
+            "SELECT id, {$nameCol} as name, client_code FROM clients WHERE is_active = 1 ORDER BY {$nameCol}"
         );
     }
     
