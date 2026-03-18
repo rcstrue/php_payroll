@@ -2,9 +2,28 @@
 /**
  * RCS HRMS Pro - Employee List Page
  * Updated for new database schema
+ *
+ * NOTE: Column visibility dropdown added - users can toggle columns on/off
+ * Preferences are saved in localStorage for persistence
  */
 
 $pageTitle = 'Employees';
+
+// Define available columns for the visibility dropdown
+// NOTE: Add new columns here when adding new fields to the employee table
+$availableColumns = [
+    'employee_code' => 'Employee Code',
+    'full_name' => 'Name',
+    'designation' => 'Designation',
+    'client_unit' => 'Client / Unit',
+    'worker_category' => 'Category',
+    'date_of_joining' => 'DOJ',
+    'pf_esi' => 'PF/ESI',
+    'mobile_number' => 'Mobile',
+    'email' => 'Email',
+    'status' => 'Status',
+    'actions' => 'Actions'
+];
 
 // Get filters - default to 'approved' (active) employees
 // Sanitize all user inputs to prevent XSS
@@ -165,6 +184,30 @@ try {
                     <a href="index.php?page=employee/import" class="btn btn-outline-primary btn-sm">
                         <i class="bi bi-upload me-1"></i>Import
                     </a>
+                    <!-- Column Visibility Dropdown -->
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-layout-three-columns me-1"></i>Columns
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end p-2" style="min-width: 200px;">
+                            <li><small class="text-muted d-block mb-2">Toggle column visibility:</small></li>
+                            <?php foreach ($availableColumns as $colKey => $colLabel): ?>
+                            <li>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input column-toggle" id="col_<?php echo $colKey; ?>" 
+                                           data-column="<?php echo $colKey; ?>" checked>
+                                    <label class="form-check-label" for="col_<?php echo $colKey; ?>"><?php echo $colLabel; ?></label>
+                                </div>
+                            </li>
+                            <?php endforeach; ?>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <button type="button" class="btn btn-sm btn-outline-primary w-100" onclick="resetColumnVisibility()">
+                                    <i class="bi bi-arrow-counterclockwise me-1"></i>Reset to Default
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
             </div>
             
@@ -236,15 +279,15 @@ try {
                     <table class="table table-hover mb-0" id="employees-table">
                         <thead>
                             <tr>
-                                <th>Emp Code</th>
-                                <th>Name</th>
-                                <th>Designation</th>
-                                <th>Client / Unit</th>
-                                <th>Category</th>
-                                <th>DOJ</th>
-                                <th>PF/ESI</th>
-                                <th>Status</th>
-                                <th>Actions</th>
+                                <th data-column="employee_code">Emp Code</th>
+                                <th data-column="full_name">Name</th>
+                                <th data-column="designation">Designation</th>
+                                <th data-column="client_unit">Client / Unit</th>
+                                <th data-column="worker_category">Category</th>
+                                <th data-column="date_of_joining">DOJ</th>
+                                <th data-column="pf_esi">PF/ESI</th>
+                                <th data-column="status">Status</th>
+                                <th data-column="actions">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -257,12 +300,12 @@ try {
                             <?php else: ?>
                             <?php foreach ($employees as $emp): ?>
                             <tr>
-                                <td>
+                                <td data-column="employee_code">
                                     <a href="index.php?page=employee/view&id=<?php echo $emp['id']; ?>">
                                         <code><?php echo sanitize($emp['employee_code']); ?></code>
                                     </a>
                                 </td>
-                                <td>
+                                <td data-column="full_name">
                                     <div class="d-flex align-items-center">
                                         <div class="avatar-sm me-2 bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width:32px;height:32px;font-size:12px;">
                                             <?php echo substr($emp['full_name'] ?? 'U', 0, 1); ?>
@@ -273,19 +316,19 @@ try {
                                         </div>
                                     </div>
                                 </td>
-                                <td><?php echo sanitize($emp['designation'] ?? '-'); ?></td>
-                                <td>
+                                <td data-column="designation"><?php echo sanitize($emp['designation'] ?? '-'); ?></td>
+                                <td data-column="client_unit">
                                     <div><small class="text-muted">Client:</small> <?php echo sanitize($emp['client_name_display'] ?? $emp['client_name'] ?? '-'); ?></div>
                                     <div><small class="text-muted">Unit:</small> <?php echo sanitize($emp['unit_name_display'] ?? $emp['unit_name'] ?? '-'); ?></div>
                                 </td>
-                                <td><span class="badge bg-info-soft"><?php echo sanitize($emp['worker_category'] ?? '-'); ?></span></td>
-                                <td><?php echo formatDate($emp['date_of_joining']); ?></td>
-                                <td>
+                                <td data-column="worker_category"><span class="badge bg-info-soft"><?php echo sanitize($emp['worker_category'] ?? '-'); ?></span></td>
+                                <td data-column="date_of_joining"><?php echo formatDate($emp['date_of_joining']); ?></td>
+                                <td data-column="pf_esi">
                                     <?php if (!empty($emp['pf_applicable'])): ?><span class="badge bg-primary-soft">PF</span><?php endif; ?>
                                     <?php if (!empty($emp['esi_applicable'])): ?><span class="badge bg-success-soft">ESI</span><?php endif; ?>
                                     <?php if (empty($emp['pf_applicable']) && empty($emp['esi_applicable'])): ?><span class="text-muted">-</span><?php endif; ?>
                                 </td>
-                                <td>
+                                <td data-column="status">
                                     <?php 
                                     $statusClass = 'secondary';
                                     $statusText = $emp['status'] ?? 'Unknown';
@@ -301,7 +344,7 @@ try {
                                     ?>
                                     <span class="badge bg-<?php echo $statusClass; ?>-soft"><?php echo sanitize($statusText); ?></span>
                                 </td>
-                                <td>
+                                <td data-column="actions">
                                     <div class="btn-group btn-group-sm">
                                         <a href="index.php?page=employee/view&id=<?php echo $emp['id']; ?>" 
                                            class="btn btn-outline-primary" title="View">
@@ -422,6 +465,73 @@ function filterUnits() {
             unitSelect.innerHTML = '<option value="">All Units</option>';
         });
 }
+
+// Column visibility functions - save preferences to localStorage
+function toggleColumn(columnKey, isVisible) {
+    const table = document.getElementById('employees-table');
+    
+    // Toggle header
+    const header = table.querySelector('th[data-column="' + columnKey + '"]');
+    if (header) {
+        header.style.display = isVisible ? '' : 'none';
+    }
+    
+    // Toggle all body cells
+    const cells = table.querySelectorAll('td[data-column="' + columnKey + '"]');
+    cells.forEach(cell => {
+        cell.style.display = isVisible ? '' : 'none';
+    });
+    
+    // Save preference
+    saveColumnPreferences();
+}
+
+function saveColumnPreferences() {
+    const preferences = {};
+    document.querySelectorAll('.column-toggle').forEach(checkbox => {
+        preferences[checkbox.dataset.column] = checkbox.checked;
+    });
+    localStorage.setItem('employeeListColumnPrefs', JSON.stringify(preferences));
+}
+
+function loadColumnPreferences() {
+    const saved = localStorage.getItem('employeeListColumnPrefs');
+    if (saved) {
+        try {
+            const preferences = JSON.parse(saved);
+            Object.keys(preferences).forEach(columnKey => {
+                const checkbox = document.querySelector('.column-toggle[data-column="' + columnKey + '"]');
+                if (checkbox) {
+                    checkbox.checked = preferences[columnKey];
+                    toggleColumn(columnKey, preferences[columnKey]);
+                }
+            });
+        } catch (e) {
+            console.error('Error loading column preferences:', e);
+        }
+    }
+}
+
+function resetColumnVisibility() {
+    localStorage.removeItem('employeeListColumnPrefs');
+    document.querySelectorAll('.column-toggle').forEach(checkbox => {
+        checkbox.checked = true;
+        toggleColumn(checkbox.dataset.column, true);
+    });
+}
+
+// Initialize column toggle handlers on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Add change handlers to all column toggles
+    document.querySelectorAll('.column-toggle').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            toggleColumn(this.dataset.column, this.checked);
+        });
+    });
+    
+    // Load saved preferences
+    loadColumnPreferences();
+});
 </script>
 JS;
 ?>

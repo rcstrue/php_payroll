@@ -280,12 +280,12 @@ class Employee {
             'special_allowance' => floatval($data['special_allowance'] ?? 0),
             'other_allowance' => floatval($data['other_allowance'] ?? 0),
             'gross_salary' => floatval($data['gross_salary'] ?? 0),
-            'pf_applicable' => !empty($data['pf_applicable']) ? 1 : 1,
-            'esi_applicable' => !empty($data['esi_applicable']) ? 1 : 1,
-            'pt_applicable' => !empty($data['pt_applicable']) ? 1 : 1,
-            'lwf_applicable' => !empty($data['lwf_applicable']) ? 1 : 1,
-            'bonus_applicable' => !empty($data['bonus_applicable']) ? 1 : 1,
-            'gratuity_applicable' => !empty($data['gratuity_applicable']) ? 1 : 1,
+            'pf_applicable' => !empty($data['pf_applicable']) ? 1 : 0,
+            'esi_applicable' => !empty($data['esi_applicable']) ? 1 : 0,
+            'pt_applicable' => !empty($data['pt_applicable']) ? 1 : 0,
+            'lwf_applicable' => !empty($data['lwf_applicable']) ? 1 : 0,
+            'bonus_applicable' => !empty($data['bonus_applicable']) ? 1 : 0,
+            'gratuity_applicable' => !empty($data['gratuity_applicable']) ? 1 : 0,
             'overtime_applicable' => !empty($data['overtime_applicable']) ? 1 : 0,
         ];
     }
@@ -415,10 +415,10 @@ class Employee {
                 'special_allowance' => floatval($data['special_allowance'] ?? 0),
                 'other_allowance' => floatval($data['other_allowance'] ?? 0),
                 'gross_salary' => floatval($data['gross_salary'] ?? 0),
-                'pf_applicable' => !empty($data['pf_applicable']) ? 1 : 1,
-                'esi_applicable' => !empty($data['esi_applicable']) ? 1 : 1,
-                'pt_applicable' => !empty($data['pt_applicable']) ? 1 : 1,
-                'lwf_applicable' => !empty($data['lwf_applicable']) ? 1 : 1,
+                'pf_applicable' => !empty($data['pf_applicable']) ? 1 : 0,
+                'esi_applicable' => !empty($data['esi_applicable']) ? 1 : 0,
+                'pt_applicable' => !empty($data['pt_applicable']) ? 1 : 0,
+                'lwf_applicable' => !empty($data['lwf_applicable']) ? 1 : 0,
             ];
         }
 

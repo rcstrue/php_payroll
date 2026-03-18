@@ -226,7 +226,9 @@ function redirect($url)
     if (!headers_sent()) {
         header("Location: $url");
     } else {
-        echo '<script>window.location.href="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '";</script>';
+        // NOTE: Don't use htmlspecialchars here - JavaScript doesn't need HTML encoding
+        // The URL is already validated by sanitizeRedirectUrl for security
+        echo '<script>window.location.href="' . addslashes($url) . '";</script>';
     }
     exit;
 }

@@ -465,7 +465,8 @@ $statusLabels = [
                         <label class="text-muted small">Aadhaar Number</label>
                         <div>
                             <?php if (!empty($emp['aadhaar_number'])): ?>
-                            <code><?php echo maskAadhaar($emp['aadhaar_number']); ?></code>
+                            <!-- NOTE: Aadhaar number is NOT masked as per user requirement - full number visible for HR operations -->
+                            <code><?php echo sanitize($emp['aadhaar_number']); ?></code>
                             <?php else: ?>-<?php endif; ?>
                         </div>
                     </div>

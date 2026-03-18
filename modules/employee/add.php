@@ -568,6 +568,7 @@ $statesList = [
             </div>
             
             <!-- Statutory Details -->
+            <!-- NOTE: Checkboxes use !empty() to properly check saved values. Default to unchecked for new employees. -->
             <div class="card mb-4">
                 <div class="card-header">
                     <h5 class="card-title mb-0"><i class="bi bi-shield-check me-2"></i>Statutory Applicability</h5>
@@ -576,51 +577,51 @@ $statesList = [
                     <div class="row g-3">
                         <div class="col-md-3">
                             <div class="form-check">
-                                <input type="checkbox" class="form-check-input" name="pf_applicable" id="pf_applicable"
-                                       <?php echo ($employeeData['pf_applicable'] ?? 1) ? 'checked' : ''; ?>>
+                                <input type="checkbox" class="form-check-input" name="pf_applicable" id="pf_applicable" value="1"
+                                       <?php echo !empty($employeeData['pf_applicable']) ? 'checked' : ''; ?>>
                                 <label class="form-check-label" for="pf_applicable">PF Applicable</label>
                             </div>
                         </div>
                         <div class="col-md-3">
                             <div class="form-check">
-                                <input type="checkbox" class="form-check-input" name="esi_applicable" id="esi_applicable"
-                                       <?php echo ($employeeData['esi_applicable'] ?? 1) ? 'checked' : ''; ?>>
+                                <input type="checkbox" class="form-check-input" name="esi_applicable" id="esi_applicable" value="1"
+                                       <?php echo !empty($employeeData['esi_applicable']) ? 'checked' : ''; ?>>
                                 <label class="form-check-label" for="esi_applicable">ESI Applicable</label>
                             </div>
                         </div>
                         <div class="col-md-3">
                             <div class="form-check">
-                                <input type="checkbox" class="form-check-input" name="pt_applicable"
-                                       <?php echo ($employeeData['pt_applicable'] ?? 1) ? 'checked' : ''; ?>>
-                                <label class="form-check-label">PT Applicable</label>
+                                <input type="checkbox" class="form-check-input" name="pt_applicable" id="pt_applicable" value="1"
+                                       <?php echo !empty($employeeData['pt_applicable']) ? 'checked' : ''; ?>>
+                                <label class="form-check-label" for="pt_applicable">PT Applicable</label>
                             </div>
                         </div>
                         <div class="col-md-3">
                             <div class="form-check">
-                                <input type="checkbox" class="form-check-input" name="lwf_applicable"
-                                       <?php echo ($employeeData['lwf_applicable'] ?? 1) ? 'checked' : ''; ?>>
-                                <label class="form-check-label">LWF Applicable</label>
+                                <input type="checkbox" class="form-check-input" name="lwf_applicable" id="lwf_applicable" value="1"
+                                       <?php echo !empty($employeeData['lwf_applicable']) ? 'checked' : ''; ?>>
+                                <label class="form-check-label" for="lwf_applicable">LWF Applicable</label>
                             </div>
                         </div>
                         <div class="col-md-3">
                             <div class="form-check">
-                                <input type="checkbox" class="form-check-input" name="bonus_applicable"
-                                       <?php echo ($employeeData['bonus_applicable'] ?? 1) ? 'checked' : ''; ?>>
-                                <label class="form-check-label">Bonus Applicable</label>
+                                <input type="checkbox" class="form-check-input" name="bonus_applicable" id="bonus_applicable" value="1"
+                                       <?php echo !empty($employeeData['bonus_applicable']) ? 'checked' : ''; ?>>
+                                <label class="form-check-label" for="bonus_applicable">Bonus Applicable</label>
                             </div>
                         </div>
                         <div class="col-md-3">
                             <div class="form-check">
-                                <input type="checkbox" class="form-check-input" name="gratuity_applicable"
-                                       <?php echo ($employeeData['gratuity_applicable'] ?? 1) ? 'checked' : ''; ?>>
-                                <label class="form-check-label">Gratuity Applicable</label>
+                                <input type="checkbox" class="form-check-input" name="gratuity_applicable" id="gratuity_applicable" value="1"
+                                       <?php echo !empty($employeeData['gratuity_applicable']) ? 'checked' : ''; ?>>
+                                <label class="form-check-label" for="gratuity_applicable">Gratuity Applicable</label>
                             </div>
                         </div>
                         <div class="col-md-3">
                             <div class="form-check">
-                                <input type="checkbox" class="form-check-input" name="overtime_applicable"
-                                       <?php echo ($employeeData['overtime_applicable'] ?? 1) ? 'checked' : ''; ?>>
-                                <label class="form-check-label">Overtime Applicable</label>
+                                <input type="checkbox" class="form-check-input" name="overtime_applicable" id="overtime_applicable" value="1"
+                                       <?php echo !empty($employeeData['overtime_applicable']) ? 'checked' : ''; ?>>
+                                <label class="form-check-label" for="overtime_applicable">Overtime Applicable</label>
                             </div>
                         </div>
                     </div>
