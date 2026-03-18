@@ -31,8 +31,10 @@ $params = [];
 if ($clientFilter) { $where .= " AND e.client_id = ?"; $params['client_id'] = $clientFilter; }
 if ($search) { $where .= " AND (e.employee_code LIKE ? OR e.full_name LIKE ?)"; $params['search'] = '%' . $search . '%'; }
 
-$employees = $db->prepare("SELECT e.id, e.employee_code, e.full_name, COALESCE(c.name, e.client_name) as client_name,
+$employees = $db->prepare("SELECT e.id, e.employee_code, e.full_name, c.name as client_name,
+    u.name as unit_name
     FROM employees e LEFT JOIN clients c ON e.client_id = c.id
+    LEFT JOIN units u ON e.unit_id = u.id
     $where ORDER BY e.employee_code")->execute($params);
 $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
 

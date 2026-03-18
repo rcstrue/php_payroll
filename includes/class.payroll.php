@@ -131,26 +131,23 @@ class Payroll {
     // Get payroll for period
     public function getPayrollReport($periodId, $filters = []) {
         $sql = "SELECT p.*,
-                       e.employee_code, e.full_name, e.designation, e.client_name, e.unit_name
+                       e.employee_code, e.full_name, e.designation,
+                       c.name as client_name, u.name as unit_name
                 FROM payroll p
                 JOIN employees e ON p.employee_id = e.employee_code
+                LEFT JOIN clients c ON e.client_id = c.id
+                LEFT JOIN units u ON e.unit_id = u.id
                 WHERE p.payroll_period_id = :period_id";
         $params = ['period_id' => $periodId];
 
         if (!empty($filters['unit_id'])) {
-            $unit = $this->db->fetch("SELECT name FROM units WHERE id = :id", ['id' => $filters['unit_id']]);
-            if ($unit) {
-                $sql .= SQL_FILTER_UNIT_NAME;
-                $params['unit_name'] = $unit['name'];
-            }
+            $sql .= " AND e.unit_id = :unit_id";
+            $params['unit_id'] = $filters['unit_id'];
         }
 
         if (!empty($filters['client_id'])) {
-            $client = $this->db->fetch("SELECT name FROM clients WHERE id = :id", ['id' => $filters['client_id']]);
-            if ($client) {
-                $sql .= SQL_FILTER_CLIENT_NAME;
-                $params['client_name'] = $client['name'];
-            }
+            $sql .= " AND e.client_id = :client_id";
+            $params['client_id'] = $filters['client_id'];
         }
 
         $sql .= " ORDER BY e.employee_code";
@@ -162,9 +159,12 @@ class Payroll {
     public function getEmployeePayroll($employeeCode, $periodId = null) {
         if ($periodId) {
             return $this->db->fetch(
-                "SELECT p.*, e.full_name, e.designation, e.client_name, e.unit_name
+                "SELECT p.*, e.full_name, e.designation,
+                        c.name as client_name, u.name as unit_name
                  FROM payroll p
                  JOIN employees e ON p.employee_id = e.employee_code
+                 LEFT JOIN clients c ON e.client_id = c.id
+                 LEFT JOIN units u ON e.unit_id = u.id
                  WHERE p.employee_id = :emp_code AND p.payroll_period_id = :period_id",
                 ['emp_code' => $employeeCode, 'period_id' => $periodId]
             );
@@ -195,7 +195,8 @@ class Payroll {
 
         // Get all active employees with salary structure
         $sql = "SELECT e.id, e.employee_code, e.full_name, e.date_of_joining,
-                       e.date_of_leaving, e.client_name, e.unit_name, e.worker_category,
+                       e.date_of_leaving, e.client_id, e.unit_id, e.worker_category,
+                       c.name as client_name, u.name as unit_name,
                        ess.basic_wage, ess.da, ess.hra, ess.conveyance,
                        ess.medical_allowance, ess.special_allowance, ess.other_allowance,
                        ess.gross_salary, ess.pf_applicable, ess.esi_applicable,
@@ -203,17 +204,19 @@ class Payroll {
                 FROM employees e
                 INNER JOIN employee_salary_structures ess ON e.id = ess.employee_id
                     AND (ess.effective_to IS NULL OR ess.effective_to >= CURDATE())
+                LEFT JOIN clients c ON e.client_id = c.id
+                LEFT JOIN units u ON e.unit_id = u.id
                 WHERE e.status = 'approved'";
 
         $params = [];
 
         if (!empty($filters['unit_name'])) {
-            $sql .= SQL_FILTER_UNIT_NAME;
+            $sql .= " AND u.name = :unit_name";
             $params['unit_name'] = $filters['unit_name'];
         }
 
         if (!empty($filters['client_name'])) {
-            $sql .= SQL_FILTER_CLIENT_NAME;
+            $sql .= " AND c.name = :client_name";
             $params['client_name'] = $filters['client_name'];
         }
 
@@ -552,12 +555,14 @@ class Payroll {
         return $this->db->fetch(
             "SELECT p.*, pp.period_name, pp.month, pp.year, pp.start_date, pp.end_date,
                     e.full_name, e.employee_code, e.designation, e.department,
-                    e.client_name, e.unit_name, e.date_of_joining,
-                    e.pf_account as uan_number, e.esic_number,
+                    c.name as client_name, u.name as unit_name, e.date_of_joining,
+                    e.uan_number, e.esic_number,
                     e.bank_name, e.account_number, e.ifsc_code
              FROM payroll p
              JOIN payroll_periods pp ON p.payroll_period_id = pp.id
              JOIN employees e ON p.employee_id = e.employee_code
+             LEFT JOIN clients c ON e.client_id = c.id
+             LEFT JOIN units u ON e.unit_id = u.id
              WHERE p.payroll_period_id = :period_id AND p.employee_id = :emp_code",
             ['period_id' => $periodId, 'emp_code' => $employeeCode]
         );
@@ -590,23 +595,26 @@ class Payroll {
 
     // Get salary register data
     public function getSalaryRegister($periodId, $filters = []) {
-        $sql = "SELECT p.*, e.full_name, e.designation, e.client_name, e.unit_name, e.worker_category
+        $sql = "SELECT p.*, e.full_name, e.designation, e.worker_category,
+                       c.name as client_name, u.name as unit_name
                 FROM payroll p
                 JOIN employees e ON p.employee_id = e.employee_code
+                LEFT JOIN clients c ON e.client_id = c.id
+                LEFT JOIN units u ON e.unit_id = u.id
                 WHERE p.payroll_period_id = :period_id";
         $params = ['period_id' => $periodId];
 
         if (!empty($filters['unit_name'])) {
-            $sql .= SQL_FILTER_UNIT_NAME;
+            $sql .= " AND u.name = :unit_name";
             $params['unit_name'] = $filters['unit_name'];
         }
 
         if (!empty($filters['client_name'])) {
-            $sql .= SQL_FILTER_CLIENT_NAME;
+            $sql .= " AND c.name = :client_name";
             $params['client_name'] = $filters['client_name'];
         }
 
-        $sql .= " ORDER BY e.client_name, e.unit_name, e.employee_code";
+        $sql .= " ORDER BY c.name, u.name, e.employee_code";
 
         return $this->db->fetchAll($sql, $params);
     }

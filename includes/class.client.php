@@ -63,6 +63,18 @@ class Client {
             unset($data['client_name']);
         }
         
+        // Map phone to contact_phone (database column)
+        if (isset($data['phone'])) {
+            $data['contact_phone'] = $data['phone'];
+            unset($data['phone']);
+        }
+        
+        // Map email to contact_email (database column)
+        if (isset($data['email'])) {
+            $data['contact_email'] = $data['email'];
+            unset($data['email']);
+        }
+        
         $data['created_at'] = date('Y-m-d H:i:s');
         $data['is_active'] = $data['is_active'] ?? 1;
 
@@ -80,6 +92,18 @@ class Client {
         if (isset($data['client_name'])) {
             $data['name'] = $data['client_name'];
             unset($data['client_name']);
+        }
+        
+        // Map phone to contact_phone (database column)
+        if (isset($data['phone'])) {
+            $data['contact_phone'] = $data['phone'];
+            unset($data['phone']);
+        }
+        
+        // Map email to contact_email (database column)
+        if (isset($data['email'])) {
+            $data['contact_email'] = $data['email'];
+            unset($data['email']);
         }
         
         $data['updated_at'] = date('Y-m-d H:i:s');

@@ -31,7 +31,7 @@ $unitFilter = isset($_GET['unit']) ? sanitize($_GET['unit']) : '';
 $clients = $db->fetchAll(
     "SELECT DISTINCT c.name as client_name 
      FROM employees e LEFT JOIN clients c ON e.client_id = c.id 
-     WHERE e.client_name IS NOT NULL ORDER BY client_name"
+     WHERE c.name IS NOT NULL ORDER BY client_name"
 );
 
 // Handle actions
@@ -153,11 +153,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $params = [];
         
         if ($clientName) {
-            $sql .= " AND e.client_name = :client";
+            $sql .= " AND EXISTS (SELECT 1 FROM clients c WHERE c.id = e.client_id AND c.name = :client)";
             $params[':client'] = $clientName;
         }
         if ($unitName) {
-            $sql .= " AND e.unit_name = :unit";
+            $sql .= " AND EXISTS (SELECT 1 FROM units u WHERE u.id = e.unit_id AND u.name = :unit)";
             $params[':unit'] = $unitName;
         }
         
@@ -223,23 +223,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Get revision history
 $revisions = $db->fetchAll(
-    "SELECT sr.*, e.employee_code, e.full_name, e.client_name, e.unit_name
+    "SELECT sr.*, e.employee_code, e.full_name, c.name as client_name, u.name as unit_name
      FROM salary_revisions sr
      JOIN employees e ON sr.employee_id = e.id
+     LEFT JOIN clients c ON e.client_id = c.id
+     LEFT JOIN units u ON e.unit_id = u.id
      ORDER BY sr.created_at DESC
      LIMIT 100"
 );
 
 // Get employees with current salary
 $employees = $db->fetchAll(
-    "SELECT e.id, e.employee_code, e.full_name, e.client_name, e.unit_name, 
+    "SELECT e.id, e.employee_code, e.full_name, c.name as client_name, u.name as unit_name, 
             e.state, e.worker_category, e.skill_category,
             ess.basic_wage, ess.gross_salary, ess.daily_rate, ess.monthly_rate
      FROM employees e
      LEFT JOIN employee_salary_structures ess ON e.id = ess.employee_id 
         AND (ess.effective_to IS NULL OR ess.effective_to >= CURDATE())
+     LEFT JOIN clients c ON e.client_id = c.id
+     LEFT JOIN units u ON e.unit_id = u.id
      WHERE e.status = 'approved'
-     ORDER BY e.client_name, e.full_name"
+     ORDER BY c.name, e.full_name"
 );
 
 include '../../templates/header.php';

@@ -17,7 +17,7 @@ class Unit {
     // Get all units
     public function getAll($clientId = null, $activeOnly = true) {
         $sql = "SELECT u.*, c.name as client_name,
-                (SELECT COUNT(*) FROM employees e WHERE e.unit_name = u.name AND e.status IN ('approved', 'pending_hr_verification')) as employee_count
+                (SELECT COUNT(*) FROM employees e WHERE e.unit_id = u.id AND e.status IN ('approved', 'pending_hr_verification')) as employee_count
                 FROM units u
                 LEFT JOIN clients c ON u.client_id = c.id
                 WHERE 1=1";
@@ -122,8 +122,8 @@ class Unit {
         $unit = $this->getById($id);
         if ($unit) {
             $employees = $this->db->fetch(
-                "SELECT COUNT(*) as count FROM employees WHERE unit_name = :name",
-                ['name' => $unit['name']]
+                "SELECT COUNT(*) as count FROM employees WHERE unit_id = :id",
+                ['id' => $id]
             );
             
             if ($employees['count'] > 0) {

@@ -56,10 +56,11 @@ class Attendance {
     // Get employees for attendance by unit name
     public function getEmployeesForAttendance($unitName) {
         return $this->db->fetchAll(
-            "SELECT id, employee_code, full_name 
-             FROM employees 
-             WHERE unit_name = :unit_name AND status = 'approved'
-             ORDER BY employee_code",
+            "SELECT e.id, e.employee_code, e.full_name 
+             FROM employees e
+             LEFT JOIN units u ON e.unit_id = u.id
+             WHERE u.name = :unit_name AND e.status = 'approved'
+             ORDER BY e.employee_code",
             ['unit_name' => $unitName]
         );
     }
@@ -294,11 +295,6 @@ class Attendance {
     
     // Get attendance by unit for a month
     public function getUnitAttendance($unitId, $month, $year) {
-        $unit = $this->db->fetch(SQL_GET_UNIT_NAME, ['id' => $unitId]);
-        if (!$unit) {
-            return [];
-        }
-        
         // Get all employees in unit with their attendance
         return $this->db->fetchAll(
             "SELECT e.id, e.employee_code, e.full_name, e.designation,
@@ -311,10 +307,10 @@ class Attendance {
              LEFT JOIN attendance a ON e.employee_code = a.employee_id 
                 AND MONTH(a.attendance_date) = :month 
                 AND YEAR(a.attendance_date) = :year
-             WHERE e.unit_name = :unit_name AND e.status = 'approved'
+             WHERE e.unit_id = :unit_id AND e.status = 'approved'
              GROUP BY e.id
              ORDER BY e.employee_code",
-            ['unit_name' => $unit['name'], 'month' => $month, 'year' => $year]
+            ['unit_id' => $unitId, 'month' => $month, 'year' => $year]
         );
     }
     
@@ -404,7 +400,7 @@ class Attendance {
     }
     
     // Get attendance summary for all employees for payroll
-    public function getMonthlySummaryForPayroll($month, $year, $unitName = null) {
+    public function getMonthlySummaryForPayroll($month, $year, $unitId = null) {
         $sql = "SELECT e.employee_code, e.full_name, e.id as employee_uuid,
                        COALESCE(a.total_days, 0) as total_days,
                        COALESCE(a.present_days, 0) as present_days,
@@ -433,9 +429,9 @@ class Attendance {
         
         $params = ['month' => $month, 'year' => $year];
         
-        if ($unitName) {
-            $sql .= " AND e.unit_name = :unit_name";
-            $params['unit_name'] = $unitName;
+        if ($unitId) {
+            $sql .= " AND e.unit_id = :unit_id";
+            $params['unit_id'] = $unitId;
         }
         
         $sql .= " ORDER BY e.employee_code";

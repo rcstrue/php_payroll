@@ -637,34 +637,24 @@ class Compliance {
 
     // Generate Form V - Register of Workmen
     public function generateFormV($unitId, $month = null, $year = null) {
-        // Get unit name
-        $unit = $this->db->fetch(SQL_GET_UNIT_NAME, ['id' => $unitId]);
-        if (!$unit) {
-            return [];
-        }
-
         // Note: $month and $year are optional parameters for future filtering
         // Currently returns all active employees for the unit
         return $this->db->fetchAll(
-            "SELECT e.*, ess.basic_wage, ess.gross_salary
+            "SELECT e.*, c.name as client_name, u.name as unit_name, ess.basic_wage, ess.gross_salary
              FROM employees e
              LEFT JOIN employee_salary_structures ess ON e.id = ess.employee_id
                 AND (ess.effective_to IS NULL OR ess.effective_to >= CURDATE())
-             WHERE e.unit_name = :unit_name
+             LEFT JOIN clients c ON e.client_id = c.id
+             LEFT JOIN units u ON e.unit_id = u.id
+             WHERE e.unit_id = :unit_id
              AND e.status IN ('approved', 'pending_hr_verification')
              ORDER BY e.employee_code",
-            ['unit_name' => $unit['name']]
+            ['unit_id' => $unitId]
         );
     }
 
     // Generate Form XVI - Muster Roll (Attendance Register)
     public function generateFormXVI($unitId, $month, $year) {
-        // Get unit name
-        $unit = $this->db->fetch(SQL_GET_UNIT_NAME, ['id' => $unitId]);
-        if (!$unit) {
-            return [];
-        }
-
         // Try to get attendance data
         try {
             return $this->db->fetchAll(
@@ -677,10 +667,10 @@ class Compliance {
                         COALESCE(a.overtime_hours, 0) as total_overtime_hours
                  FROM employees e
                  LEFT JOIN attendance a ON e.id = a.employee_id AND MONTH(a.attendance_date) = :month AND YEAR(a.attendance_date) = :year
-                 WHERE e.unit_name = :unit_name
+                 WHERE e.unit_id = :unit_id
                  AND e.status = 'approved'
                  ORDER BY e.employee_code",
-                ['unit_name' => $unit['name'], 'month' => $month, 'year' => $year]
+                ['unit_id' => $unitId, 'month' => $month, 'year' => $year]
             );
         } catch (Exception $e) {
             // Return just employees if attendance table doesn't exist
@@ -688,22 +678,16 @@ class Compliance {
                 "SELECT e.employee_code, e.full_name, e.father_name, e.designation, e.worker_category,
                         0 as present_days, 0 as absent_days, 0 as weekly_offs, 0 as holidays, 0 as total_working_days, 0 as total_overtime_hours
                  FROM employees e
-                 WHERE e.unit_name = :unit_name
+                 WHERE e.unit_id = :unit_id
                  AND e.status = 'approved'
                  ORDER BY e.employee_code",
-                ['unit_name' => $unit['name']]
+                ['unit_id' => $unitId]
             );
         }
     }
 
     // Generate Form XVII - Register of Wages
     public function generateFormXVII($unitId, $periodId) {
-        // Get unit name
-        $unit = $this->db->fetch(SQL_GET_UNIT_NAME, ['id' => $unitId]);
-        if (!$unit) {
-            return [];
-        }
-
         // Get period details
         $period = $this->db->fetch("SELECT * FROM payroll_periods WHERE id = :id", ['id' => $periodId]);
         if (!$period) {
@@ -714,11 +698,11 @@ class Compliance {
             return $this->db->fetchAll(
                 "SELECT p.*, e.full_name, e.father_name, e.designation
                  FROM payroll p
-                 JOIN employees e ON p.employee_code = e.employee_code
-                 WHERE e.unit_name = :unit_name
+                 JOIN employees e ON p.employee_id = e.employee_code
+                 WHERE e.unit_id = :unit_id
                  AND p.payroll_period_id = :period_id
                  ORDER BY e.employee_code",
-                ['unit_name' => $unit['name'], 'period_id' => $periodId]
+                ['unit_id' => $unitId, 'period_id' => $periodId]
             );
         } catch (Exception $e) {
             return [];
