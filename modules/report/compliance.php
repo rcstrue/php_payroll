@@ -5,10 +5,6 @@
 
 $pageTitle = 'Compliance Reports';
 
-// SQL clause constants to avoid string duplication
-define('SQL_FILTER_CLIENT', ' AND e.client_id = :client_id');
-define('SQL_ORDER_BY_NAME', ' ORDER BY c.name, e.full_name');
-
 // Get filter parameters
 $month = isset($_GET['month']) ? (int)$_GET['month'] : (int)date('n');
 $year = isset($_GET['year']) ? (int)$_GET['year'] : (int)date('Y');
