@@ -5,14 +5,6 @@
  * Updated for new database schema
  */
 
-// SQL query constants to avoid string duplication
-if (!defined('SQL_GET_UNIT_NAME')) {
-    define('SQL_GET_UNIT_NAME', 'SELECT name FROM units WHERE id = :id');
-}
-if (!defined('SQL_GET_PAYROLL_PERIOD')) {
-    define('SQL_GET_PAYROLL_PERIOD', 'SELECT id FROM payroll_periods WHERE month = :month AND year = :year');
-}
-
 class Compliance {
     private $db;
 

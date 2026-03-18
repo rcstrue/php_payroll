@@ -5,11 +5,6 @@
  * Updated for new database schema
  */
 
-// SQL constant to avoid string duplication
-if (!defined('SQL_GET_UNIT_NAME')) {
-    define('SQL_GET_UNIT_NAME', 'SELECT name FROM units WHERE id = :id');
-}
-
 class Attendance {
     private $db;
     

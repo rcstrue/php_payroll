@@ -27,9 +27,8 @@ if (!in_array($_SESSION['role_code'], ['admin', 'hr_executive', 'manager'])) {
     redirect('index.php?page=dashboard');
 }
 
-// Constants to avoid string duplication
+// Page URL constant
 define('ARREARS_PAGE_URL', 'index.php?page=payroll/arrears');
-define('DATETIME_FORMAT_SQL', 'Y-m-d H:i:s');
 
 // Handle arrear calculation
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
@@ -141,7 +140,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             'reason' => $reason,
             'status' => 'pending',
             'created_by' => $_SESSION['user_id'],
-            'created_at' => date(DATETIME_FORMAT_SQL)
+            'created_at' => date(DATETIME_FORMAT_DB)
         ];
         
         try {
@@ -188,7 +187,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 'end_date' => $endDate,
                 'status' => 'draft',
                 'created_by' => $_SESSION['user_id'],
-                'created_at' => date(DATETIME_FORMAT_SQL)
+                'created_at' => date(DATETIME_FORMAT_DB)
             ]);
         } else {
             $periodId = $period['id'];
@@ -207,7 +206,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 'pf_employee' => $existingPayroll['pf_employee'] + $arrear['pf_arrear'],
                 'esi_employee' => $existingPayroll['esi_employee'] + $arrear['esi_arrear'],
                 'net_salary' => $existingPayroll['net_salary'] + $arrear['net_arrear'],
-                'updated_at' => date(DATETIME_FORMAT_SQL)
+                'updated_at' => date(DATETIME_FORMAT_DB)
             ], 'id = :id', ['id' => $existingPayroll['id']]);
         } else {
             // Create new payroll record with arrear
@@ -219,7 +218,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 'esi_employee' => $arrear['esi_arrear'],
                 'net_salary' => $arrear['net_arrear'],
                 'payment_status' => 'pending',
-                'created_at' => date(DATETIME_FORMAT_SQL)
+                'created_at' => date(DATETIME_FORMAT_DB)
             ]);
         }
         
@@ -227,7 +226,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $db->update('employee_arrears', [
             'status' => 'approved',
             'approved_by' => $_SESSION['user_id'],
-            'approved_at' => date(DATETIME_FORMAT_SQL),
+            'approved_at' => date(DATETIME_FORMAT_DB),
             'payment_period_id' => $periodId
         ], 'id = :id', ['id' => $arrearId]);
         

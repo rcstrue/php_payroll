@@ -5,17 +5,6 @@
  * Updated for new database schema with proper statutory calculations
  */
 
-// SQL clause constants to avoid string duplication
-if (!defined('SQL_FILTER_UNIT_NAME')) {
-    define('SQL_FILTER_UNIT_NAME', ' AND e.unit_name = :unit_name');
-}
-if (!defined('SQL_FILTER_CLIENT_NAME')) {
-    define('SQL_FILTER_CLIENT_NAME', ' AND e.client_name = :client_name');
-}
-if (!defined('SQL_WHERE_ID')) {
-    define('SQL_WHERE_ID', 'id = :id');
-}
-
 class Payroll {
     private $db;
 

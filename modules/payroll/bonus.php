@@ -10,15 +10,6 @@
  * - Bonus register
  */
 
-// Constants to avoid string duplication
-define('BONUS_PAGE_URL', 'index.php?page=payroll/bonus');
-define('DATETIME_FORMAT_SQL', 'Y-m-d H:i:s');
-
-// Use SQL_WHERE_ID constant if available, otherwise define it
-if (!defined('SQL_WHERE_ID')) {
-    define('SQL_WHERE_ID', 'id = :id');
-}
-
 $pageTitle = 'Bonus Calculation';
 $page = 'payroll/bonus';
 
@@ -165,7 +156,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         'bonus_rate' => $record['bonus_rate'],
                         'bonus_amount' => $record['bonus_amount'],
                         'status' => 'calculated',
-                        'updated_at' => date(DATETIME_FORMAT_SQL)
+                        'updated_at' => date(DATETIME_FORMAT_DB)
                     ], SQL_WHERE_ID, ['id' => $existing['id']]);
                 } else {
                     // Insert
@@ -178,7 +169,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         'bonus_amount' => $record['bonus_amount'],
                         'status' => 'calculated',
                         'created_by' => $_SESSION['user_id'],
-                        'created_at' => date(DATETIME_FORMAT_SQL)
+                        'created_at' => date(DATETIME_FORMAT_DB)
                     ]);
                 }
             }
@@ -224,7 +215,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 'end_date' => $endDate,
                 'status' => 'draft',
                 'created_by' => $_SESSION['user_id'],
-                'created_at' => date(DATETIME_FORMAT_SQL)
+                'created_at' => date(DATETIME_FORMAT_DB)
             ]);
         } else {
             $periodId = $period['id'];
@@ -240,7 +231,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $db->update('payroll', [
                 'bonus' => $existingPayroll['bonus'] + $bonus['bonus_amount'],
                 'net_salary' => $existingPayroll['net_salary'] + $bonus['bonus_amount'],
-                'updated_at' => date(DATETIME_FORMAT_SQL)
+                'updated_at' => date(DATETIME_FORMAT_DB)
             ], SQL_WHERE_ID, ['id' => $existingPayroll['id']]);
         } else {
             $db->insert('payroll', [
@@ -249,14 +240,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 'bonus' => $bonus['bonus_amount'],
                 'net_salary' => $bonus['bonus_amount'],
                 'payment_status' => 'pending',
-                'created_at' => date(DATETIME_FORMAT_SQL)
+                'created_at' => date(DATETIME_FORMAT_DB)
             ]);
         }
         
         // Update bonus status
         $db->update('employee_bonus', [
             'status' => 'disbursed',
-            'disbursed_at' => date(DATETIME_FORMAT_SQL),
+            'disbursed_at' => date(DATETIME_FORMAT_DB),
             'payment_period_id' => $periodId
         ], SQL_WHERE_ID, ['id' => $bonusId]);
         

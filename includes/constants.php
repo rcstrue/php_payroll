@@ -124,3 +124,7 @@ define('MARITAL_WIDOWED', 'Widowed');
 // SQL Constants (to avoid string duplication)
 // ============================================
 define('SQL_WHERE_ID', 'id = :id');
+define('SQL_GET_UNIT_NAME', 'SELECT name FROM units WHERE id = :id');
+define('SQL_GET_PAYROLL_PERIOD', 'SELECT id FROM payroll_periods WHERE month = :month AND year = :year');
+define('SQL_FILTER_UNIT_NAME', ' AND e.unit_name = :unit_name');
+define('SQL_FILTER_CLIENT_NAME', ' AND e.client_name = :client_name');
