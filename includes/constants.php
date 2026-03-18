@@ -128,3 +128,5 @@ define('SQL_GET_UNIT_NAME', 'SELECT name FROM units WHERE id = :id');
 define('SQL_GET_PAYROLL_PERIOD', 'SELECT id FROM payroll_periods WHERE month = :month AND year = :year');
 define('SQL_FILTER_UNIT_NAME', ' AND e.unit_name = :unit_name');
 define('SQL_FILTER_CLIENT_NAME', ' AND e.client_name = :client_name');
+define('SQL_FILTER_CLIENT', ' AND e.client_id = :client_id');
+define('SQL_ORDER_BY_NAME', ' ORDER BY c.name, e.full_name');
