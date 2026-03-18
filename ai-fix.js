@@ -8,19 +8,39 @@
 const fs = require('fs');
 const path = require('path');
 
-// Check for required environment variable
-if (!process.env.ZAI_API_KEY) {
-    console.log('⚠️ ZAI_API_KEY not set. Skipping AI fix.');
-    process.exit(0);
+// Load environment variables from .env file
+try {
+    const envPath = path.join(process.cwd(), '.env');
+    if (fs.existsSync(envPath)) {
+        const envContent = fs.readFileSync(envPath, 'utf8');
+        envContent.split('\n').forEach(line => {
+            const [key, ...valueParts] = line.split('=');
+            if (key && valueParts.length > 0 && !key.startsWith('#')) {
+                const value = valueParts.join('=').trim();
+                if (!process.env[key.trim()]) {
+                    process.env[key.trim()] = value;
+                }
+            }
+        });
+    }
+} catch (e) {
+    // Ignore .env loading errors
 }
 
-// Import z-ai-web-dev-sdk
-let ZAI;
-try {
-    ZAI = require('z-ai-web-dev-sdk');
-} catch (e) {
-    console.log('⚠️ z-ai-web-dev-sdk not installed. Skipping AI fix.');
-    process.exit(0);
+// Check for API key - will run auto-fixes even without it
+const hasAPIKey = !!process.env.ZAI_API_KEY && process.env.ZAI_API_KEY !== 'your_api_key_here';
+
+// Import z-ai-web-dev-sdk (optional)
+let ZAI = null;
+if (hasAPIKey) {
+    try {
+        ZAI = require('z-ai-web-dev-sdk');
+        console.log('✅ Z-AI SDK loaded, AI fixes enabled.');
+    } catch (e) {
+        console.log('⚠️ z-ai-web-dev-sdk not installed. Using auto-fix patterns only.');
+    }
+} else {
+    console.log('ℹ️ ZAI_API_KEY not set. Using auto-fix patterns only (AI disabled).');
 }
 
 const SEVERITY_ORDER = { 'BLOCKER': 1, 'CRITICAL': 2, 'MAJOR': 3, 'MINOR': 4 };
@@ -251,13 +271,15 @@ async function main() {
     // Group issues by file
     const groupedIssues = groupIssuesByFile(securityIssues);
 
-    // Initialize AI
+    // Initialize AI (only if SDK is available)
     let zai = null;
-    try {
-        zai = await ZAI.create();
-        console.log('🤖 AI SDK initialized.\n');
-    } catch (e) {
-        console.log('⚠️ AI SDK initialization failed. Using auto-fix patterns only.\n');
+    if (ZAI && hasAPIKey) {
+        try {
+            zai = await ZAI.create();
+            console.log('🤖 AI SDK initialized.\n');
+        } catch (e) {
+            console.log('⚠️ AI SDK initialization failed. Using auto-fix patterns only.\n');
+        }
     }
 
     let totalFixed = 0;
