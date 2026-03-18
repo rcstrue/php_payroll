@@ -2,12 +2,16 @@
 /**
  * RCS HRMS Pro - Issue Asset to Employee
  * Manpower Supplier - Asset Issuance
+ *
+ * @package RCS\HRMS\Assets
  */
+
+use RCS\HRMS\Auth;
+
 require_once '../../config/config.php';
 require_once '../../includes/database.php';
-require_once '../../includes/class.auth.php';
 
-$auth = new Auth($db);
+$auth = new Auth();
 if (!$auth->isLoggedIn()) {
     redirect('index.php?page=auth/login');
 }
@@ -46,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $issuance['expected_return_date'] = !empty($_POST['expected_return_date']) ? sanitize($_POST['expected_return_date']) : null;
     $issuance['issue_condition'] = sanitize($_POST['issue_condition'] ?? 'good');
     $issuance['issue_remarks'] = sanitize($_POST['issue_remarks'] ?? '');
-    
+
     // Validate
     if (empty($issuance['employee_id'])) {
         $errors[] = 'Please select an employee';
@@ -57,26 +61,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($issuance['quantity'] < 1) {
         $errors[] = 'Quantity must be at least 1';
     }
-    
+
     // Check available quantity
     $stmt = $db->prepare("SELECT available_quantity, asset_name FROM assets WHERE id = ?");
     $stmt->execute([$issuance['asset_id']]);
     $asset = $stmt->fetch(PDO::FETCH_ASSOC);
-    
+
     if (!$asset || $asset['available_quantity'] < $issuance['quantity']) {
         $errors[] = 'Insufficient quantity available';
     }
-    
+
     if (empty($errors)) {
         try {
             $db->beginTransaction();
-            
+
             // Insert issuance record
-            $stmt = $db->prepare("INSERT INTO employee_assets 
-                (employee_id, asset_id, quantity, issue_date, expected_return_date, 
-                issue_condition, issue_remarks, status, issued_by) 
+            $stmt = $db->prepare("INSERT INTO employee_assets
+                (employee_id, asset_id, quantity, issue_date, expected_return_date,
+                issue_condition, issue_remarks, status, issued_by)
                 VALUES (?, ?, ?, ?, ?, ?, ?, 'issued', ?)");
-            
+
             $stmt->execute([
                 $issuance['employee_id'],
                 $issuance['asset_id'],
@@ -87,16 +91,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $issuance['issue_remarks'],
                 $_SESSION['user_id']
             ]);
-            
+
             // Update available quantity
             $stmt = $db->prepare("UPDATE assets SET available_quantity = available_quantity - ? WHERE id = ?");
             $stmt->execute([$issuance['quantity'], $issuance['asset_id']]);
-            
+
             $db->commit();
-            
+
             setFlash('success', "Asset '{$asset['asset_name']}' issued successfully");
             redirect('index.php?page=assets/issued');
-            
         } catch (Exception $e) {
             $db->rollBack();
             $errors[] = 'Error: ' . $e->getMessage();
@@ -125,7 +128,7 @@ include_once '../../templates/header.php';
 <div class="alert alert-danger">
     <ul class="mb-0">
         <?php foreach ($errors as $error): ?>
-        <li><?php echo $error; ?></li>
+        <li><?php echo sanitize($error); ?></li>
         <?php endforeach; ?>
     </ul>
 </div>
@@ -169,18 +172,18 @@ include_once '../../templates/header.php';
                         </div>
                         <div class="col-md-4">
                             <label class="form-label required" for="quantity">Quantity</label>
-                            <input type="number" name="quantity" class="form-control" 
-                                   value="<?php echo sanitize($issuance['quantity']); ?>" min="1" id="quantity" required>
+                            <input type="number" name="quantity" class="form-control"
+                                   value="<?php echo htmlspecialchars((string)$issuance['quantity'], ENT_QUOTES, 'UTF-8'); ?>" min="1" id="quantity" required>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label required" for="issue_date">Issue Date</label>
-                            <input type="date" name="issue_date" class="form-control" 
-                                   value="<?php echo sanitize($issuance['issue_date']); ?>" required>
+                            <input type="date" name="issue_date" class="form-control"
+                                   value="<?php echo htmlspecialchars((string)$issuance['issue_date'], ENT_QUOTES, 'UTF-8'); ?>" id="issue_date" required>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label" for="expectedReturn">Expected Return Date</label>
-                            <input type="date" name="expected_return_date" class="form-control" 
-                                   value="<?php echo sanitize($issuance['expected_return_date']); ?>" id="expectedReturn">
+                            <input type="date" name="expected_return_date" class="form-control"
+                                   value="<?php echo htmlspecialchars((string)$issuance['expected_return_date'], ENT_QUOTES, 'UTF-8'); ?>" id="expectedReturn">
                         </div>
                         <div class="col-md-6">
                             <label class="form-label" for="issue_condition">Condition at Issue</label>
@@ -192,8 +195,8 @@ include_once '../../templates/header.php';
                         </div>
                         <div class="col-md-6">
                             <label class="form-label" for="issue_remarks">Remarks</label>
-                            <input type="text" name="issue_remarks" id="issue_remarks" class="form-select" 
-                                   value="<?php echo sanitize($issuance['issue_remarks']); ?>" placeholder="Any notes">
+                            <input type="text" name="issue_remarks" id="issue_remarks" class="form-control"
+                                   value="<?php echo htmlspecialchars((string)$issuance['issue_remarks'], ENT_QUOTES, 'UTF-8'); ?>" placeholder="Any notes">
                         </div>
                     </div>
                 </div>
@@ -212,9 +215,9 @@ include_once '../../templates/header.php';
                         </button>
                         <a href="index.php?page=assets/list" class="btn btn-outline-secondary">Cancel</a>
                     </div>
-                    
+
                     <hr>
-                    
+
                     <div class="alert alert-info">
                         <strong>Tip:</strong> Make sure to collect acknowledgement from employee for issued items.
                     </div>
