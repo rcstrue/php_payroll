@@ -11,20 +11,20 @@ $year = isset($_GET['year']) ? (int)$_GET['year'] : (int)date('Y');
 $clientName = isset($_GET['client_name']) ? sanitize($_GET['client_name']) : '';
 $reportType = isset($_GET['report_type']) ? sanitize($_GET['report_type']) : 'summary';
 
-// Build query
+// Build query with proper JOINs
 $where = "pp.month = :month AND pp.year = :year";
 $params = ['month' => $month, 'year' => $year];
 
 if ($clientName) {
-    $where .= " AND e.client_name = :client_name";
+    $where .= " AND c.name = :client_name";
     $params['client_name'] = $clientName;
 }
 
 // Get data based on report type
 if ($reportType === 'summary') {
     $sql = "SELECT 
-                e.client_name,
-                e.unit_name,
+                c.name as client_name,
+                u.name as unit_name,
                 COUNT(*) as total_employees,
                 SUM(p.basic) as total_basic,
                 SUM(p.da) as total_da,
@@ -41,16 +41,18 @@ if ($reportType === 'summary') {
             FROM payroll p
             JOIN employees e ON p.employee_id = e.employee_code
             JOIN payroll_periods pp ON p.payroll_period_id = pp.id
+            LEFT JOIN clients c ON e.client_id = c.id
+            LEFT JOIN units u ON e.unit_id = u.id
             WHERE {$where}
-            GROUP BY e.client_name, e.unit_name
-            ORDER BY e.client_name, e.unit_name";
+            GROUP BY c.name, u.name
+            ORDER BY c.name, u.name";
 } elseif ($reportType === 'detailed') {
     $sql = "SELECT 
                 e.employee_code,
                 e.full_name,
                 e.designation,
-                e.client_name,
-                e.unit_name,
+                c.name as client_name,
+                u.name as unit_name,
                 p.basic,
                 p.da,
                 p.hra,
@@ -64,11 +66,13 @@ if ($reportType === 'summary') {
             FROM payroll p
             JOIN employees e ON p.employee_id = e.employee_code
             JOIN payroll_periods pp ON p.payroll_period_id = pp.id
+            LEFT JOIN clients c ON e.client_id = c.id
+            LEFT JOIN units u ON e.unit_id = u.id
             WHERE {$where}
-            ORDER BY e.client_name, e.unit_name, e.full_name";
+            ORDER BY c.name, u.name, e.full_name";
 } elseif ($reportType === 'statutory') {
     $sql = "SELECT 
-                e.client_name,
+                c.name as client_name,
                 COUNT(*) as pf_members,
                 SUM(CASE WHEN p.esi_employee > 0 THEN 1 ELSE 0 END) as esi_members,
                 SUM(p.pf_employee) as employee_pf,
@@ -80,9 +84,10 @@ if ($reportType === 'summary') {
             FROM payroll p
             JOIN employees e ON p.employee_id = e.employee_code
             JOIN payroll_periods pp ON p.payroll_period_id = pp.id
+            LEFT JOIN clients c ON e.client_id = c.id
             WHERE {$where}
-            GROUP BY e.client_name
-            ORDER BY e.client_name";
+            GROUP BY c.name
+            ORDER BY c.name";
 }
 
 $stmt = $db->prepare($sql);
@@ -90,7 +95,7 @@ $stmt->execute($params);
 $reportData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Get filter options
-$clients = $db->query("SELECT DISTINCT client_name FROM employees WHERE client_name IS NOT NULL ORDER BY client_name")->fetchAll(PDO::FETCH_ASSOC);
+$clients = $db->query("SELECT DISTINCT c.name as client_name FROM employees e LEFT JOIN clients c ON e.client_id = c.id WHERE c.name IS NOT NULL ORDER BY c.name")->fetchAll(PDO::FETCH_ASSOC);
 
 // Handle export
 if (isset($_GET['export']) && $_GET['export'] === 'excel') {

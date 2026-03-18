@@ -11,20 +11,20 @@ $year = isset($_GET['year']) ? (int)$_GET['year'] : (int)date('Y');
 $clientName = isset($_GET['client_name']) ? sanitize($_GET['client_name']) : '';
 $reportType = isset($_GET['report_type']) ? sanitize($_GET['report_type']) : 'summary';
 
-// Build query
+// Build query with proper JOINs
 $where = "a.month = :month AND a.year = :year";
 $params = ['month' => $month, 'year' => $year];
 
 if ($clientName) {
-    $where .= " AND e.client_name = :client_name";
+    $where .= " AND c.name = :client_name";
     $params['client_name'] = $clientName;
 }
 
 // Get data based on report type
 if ($reportType === 'summary') {
     $sql = "SELECT 
-                e.client_name,
-                e.unit_name,
+                c.name as client_name,
+                u.name as unit_name,
                 COUNT(DISTINCT e.employee_code) as total_employees,
                 SUM(a.present_days) as total_present,
                 SUM(a.absent_days) as total_absent,
@@ -32,16 +32,18 @@ if ($reportType === 'summary') {
                 SUM(a.present_days) / (COUNT(DISTINCT e.employee_code) * 30) * 100 as avg_attendance
             FROM attendance_summary a
             JOIN employees e ON a.employee_id = e.employee_code
+            LEFT JOIN clients c ON e.client_id = c.id
+            LEFT JOIN units u ON e.unit_id = u.id
             WHERE {$where}
-            GROUP BY e.client_name, e.unit_name
-            ORDER BY e.client_name, e.unit_name";
+            GROUP BY c.name, u.name
+            ORDER BY c.name, u.name";
 } elseif ($reportType === 'detailed') {
     $sql = "SELECT 
                 e.employee_code,
                 e.full_name,
                 e.designation,
-                e.client_name,
-                e.unit_name,
+                c.name as client_name,
+                u.name as unit_name,
                 a.present_days,
                 a.absent_days,
                 a.half_days,
@@ -49,18 +51,21 @@ if ($reportType === 'summary') {
                 0 as ot_amount
             FROM attendance_summary a
             JOIN employees e ON a.employee_id = e.employee_code
+            LEFT JOIN clients c ON e.client_id = c.id
+            LEFT JOIN units u ON e.unit_id = u.id
             WHERE {$where}
-            ORDER BY e.client_name, e.unit_name, e.full_name";
+            ORDER BY c.name, u.name, e.full_name";
 } elseif ($reportType === 'absenteeism') {
     $sql = "SELECT 
                 e.employee_code,
                 e.full_name,
-                e.client_name,
+                c.name as client_name,
                 a.absent_days as days_absent,
                 a.present_days as days_present,
                 ROUND(a.absent_days / (a.present_days + a.absent_days) * 100, 1) as absence_rate
             FROM attendance_summary a
             JOIN employees e ON a.employee_id = e.employee_code
+            LEFT JOIN clients c ON e.client_id = c.id
             WHERE {$where} AND a.absent_days > 3
             ORDER BY a.absent_days DESC
             LIMIT 50";
