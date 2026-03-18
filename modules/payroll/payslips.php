@@ -2,6 +2,10 @@
 /**
  * RCS HRMS Pro - Payslips Page
  * Updated for new database schema
+ *
+ * IMPORTANT: employees table does NOT have client_name or unit_name columns.
+ * Always use JOINs: LEFT JOIN units u ON e.unit_id = u.id
+ * Select as aliases: u.name AS unit_name
  */
 
 $pageTitle = 'Payslips';
@@ -13,8 +17,8 @@ $unitName = $_GET['unit_name'] ?? null;
 // Get periods
 $periods = $payroll->getPeriods();
 
-// Get units
-$stmt = $db->query("SELECT DISTINCT unit_name FROM employees WHERE unit_name IS NOT NULL AND unit_name != '' ORDER BY unit_name");
+// Get units - use JOIN with units table since employees has unit_id, not unit_name
+$stmt = $db->query("SELECT DISTINCT u.name as unit_name FROM employees e LEFT JOIN units u ON e.unit_id = u.id WHERE u.name IS NOT NULL AND u.name != '' ORDER BY u.name");
 $units = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $payslips = [];

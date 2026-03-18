@@ -1,10 +1,14 @@
 <?php
 /**
  * RCS HRMS Pro - Client Management Class
- * 
+ *
+ * IMPORTANT: employees table does NOT have client_name or unit_name columns.
+ * Always use JOINs: LEFT JOIN clients c ON e.client_id = c.id
+ * Select as aliases: c.name AS client_name
+ *
  * Database schema:
  * - clients table has 'name' field (not 'client_name')
- * - employees table has 'client_name' VARCHAR field
+ * - employees table has 'client_id' foreign key (NOT 'client_name')
  */
 
 class Client {
@@ -16,9 +20,10 @@ class Client {
     
     // Get all clients
     public function getAll($activeOnly = true) {
+        // IMPORTANT: employees table uses client_id foreign key, not client_name
         $sql = "SELECT c.*, 
                 (SELECT COUNT(*) FROM units WHERE client_id = c.id) as unit_count,
-                (SELECT COUNT(*) FROM employees WHERE client_name = c.name AND status = 'approved') as employee_count
+                (SELECT COUNT(*) FROM employees e WHERE e.client_id = c.id AND e.status = 'approved') as employee_count
                 FROM clients c";
         
         if ($activeOnly) {
@@ -102,18 +107,14 @@ class Client {
     
     // Delete client
     public function delete($id) {
-        // Get client name first
-        $client = $this->getById($id);
-        if ($client) {
-            // Check if client has employees using client_name matching name
-            $employees = $this->db->fetch(
-                "SELECT COUNT(*) as count FROM employees WHERE client_name = :name",
-                ['name' => $client['name']]
-            );
-            
-            if ($employees['count'] > 0) {
-                return ['success' => false, 'message' => 'Cannot delete client with associated employees.'];
-            }
+        // Check if client has employees using client_id foreign key
+        $employees = $this->db->fetch(
+            "SELECT COUNT(*) as count FROM employees WHERE client_id = :client_id",
+            ['client_id' => $id]
+        );
+        
+        if ($employees && $employees['count'] > 0) {
+            return ['success' => false, 'message' => 'Cannot delete client with associated employees.'];
         }
         
         $this->db->delete('clients', 'id = :id', ['id' => $id]);

@@ -2,6 +2,10 @@
 /**
  * RCS HRMS Pro - Unit List
  * Updated with compulsory unit_code and state dropdown
+ *
+ * NOTE: JavaScript pattern uses $inlineJS (wrapped in document.ready) and $extraJS (output after jQuery)
+ * This ensures jQuery is loaded before any $() calls are made.
+ * The editUnit and deleteUnit functions are defined as window.editUnit/deleteUnit for global onclick access.
  */
 
 $pageTitle = 'Units';

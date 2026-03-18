@@ -1,6 +1,10 @@
 <?php
 /**
  * RCS HRMS Pro - Attendance Reports
+ *
+ * IMPORTANT: employees table does NOT have client_name or unit_name columns.
+ * Always use JOINs: LEFT JOIN clients c ON e.client_id = c.id
+ * Select as aliases: c.name AS client_name
  */
 
 $pageTitle = 'Attendance Reports';
@@ -75,8 +79,8 @@ $stmt = $db->prepare($sql);
 $stmt->execute($params);
 $reportData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Get filter options
-$clients = $db->query("SELECT DISTINCT client_name FROM employees WHERE client_name IS NOT NULL ORDER BY client_name")->fetchAll(PDO::FETCH_ASSOC);
+// Get filter options - use JOIN with clients table since employees has client_id, not client_name
+$clients = $db->query("SELECT DISTINCT c.name as client_name FROM employees e LEFT JOIN clients c ON e.client_id = c.id WHERE c.name IS NOT NULL ORDER BY c.name")->fetchAll(PDO::FETCH_ASSOC);
 
 // Handle export
 if (isset($_GET['export']) && $_GET['export'] === 'excel') {
