@@ -7,12 +7,13 @@
 $pageTitle = 'Employees';
 
 // Get filters - default to 'approved' (active) employees
+// Sanitize all user inputs to prevent XSS
 $filters = [
-    'status' => $_GET['status'] ?? 'approved', // Default to approved/active
-    'client_id' => !empty($_GET['client_id']) ? $_GET['client_id'] : null,
-    'unit_id' => !empty($_GET['unit_id']) ? $_GET['unit_id'] : null,
-    'worker_category' => $_GET['worker_category'] ?? '',
-    'search' => $_GET['search'] ?? ''
+    'status' => sanitize($_GET['status'] ?? 'approved'), // Default to approved/active
+    'client_id' => !empty($_GET['client_id']) ? (int)$_GET['client_id'] : null,
+    'unit_id' => !empty($_GET['unit_id']) ? (int)$_GET['unit_id'] : null,
+    'worker_category' => sanitize($_GET['worker_category'] ?? ''),
+    'search' => sanitize($_GET['search'] ?? '')
 ];
 
 // Handle export - check if we can set headers (export should be handled before header.php)

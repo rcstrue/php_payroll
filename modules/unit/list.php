@@ -38,7 +38,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if (preg_match('/(\d+)$/', $lastUnit['unit_code'], $matches)) {
                         $num = (int)$matches[1] + 1;
                         $prefix = preg_replace('/\d+$/', '', $lastUnit['unit_code']);
-                        if (empty($prefix)) $prefix = 'UNT';
+                        if (empty($prefix)) {
+                            $prefix = 'UNT';
+                        }
                         $unitCode = $prefix . str_pad($num, 3, '0', STR_PAD_LEFT);
                     } else {
                         $unitCode = 'UNT001';

@@ -9,8 +9,8 @@ $pageTitle = 'Employee Details';
 // Define constant for employee view URL to avoid duplication
 define('EMPLOYEE_VIEW_URL', 'index.php?page=employee/view&id=');
 
-// Get employee ID and sanitize
-$employeeId = isset($_GET['id']) ? sanitize($_GET['id']) : '';
+// Get employee ID and validate as numeric to prevent open redirect
+$employeeId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 if (!$employeeId) {
     setFlash('error', 'Employee ID is required');
@@ -80,7 +80,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     // Document upload
     if (isset($_POST['upload_document'])) {
-        $docType = sanitize($_POST['document_type']);
+        // Whitelist allowed document types to prevent path traversal
+        $allowedDocTypes = [
+            'Aadhaar Card', 'PAN Card', 'Bank Passbook', 'Photo',
+            'Police Verification', 'Education Certificate', 'Experience Certificate',
+            'Medical Certificate', 'Other'
+        ];
+        $docType = $_POST['document_type'] ?? '';
+        
+        // Validate document type against whitelist
+        if (!in_array($docType, $allowedDocTypes)) {
+            setFlash('error', 'Invalid document type.');
+            redirect(EMPLOYEE_VIEW_URL . $employeeId);
+        }
+        
+        // Sanitize document type for filename (alphanumeric and underscore only)
+        $safeDocType = preg_replace('/[^a-zA-Z0-9_]/', '', str_replace(' ', '_', $docType));
         
         if (isset($_FILES['document_file']) && $_FILES['document_file']['error'] === UPLOAD_ERR_OK) {
             // Use safe employee code for directory (alphanumeric only) - whitelist approach for security
@@ -91,8 +106,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 mkdir(APP_ROOT . '/' . $uploadDir, 0755, true);
             }
             
-            $fileName = sanitize($docType . '_' . time() . '_' . basename($_FILES['document_file']['name']));
+            // Generate safe filename - prevent path traversal
+            $fileExtension = pathinfo($_FILES['document_file']['name'], PATHINFO_EXTENSION);
+            // Only allow safe file extensions
+            $allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'doc', 'docx'];
+            $fileExtension = in_array(strtolower($fileExtension), $allowedExtensions) ? $fileExtension : 'pdf';
+            
+            $fileName = $safeDocType . '_' . time() . '.' . $fileExtension;
             $filePath = $uploadDir . $fileName;
+            
+            // Validate the resolved path is within uploads directory
+            $resolvedPath = realpath(APP_ROOT . '/' . $uploadDir) . '/' . $fileName;
+            $uploadsBase = realpath(APP_ROOT . '/uploads');
+            
+            if (strpos($resolvedPath, $uploadsBase) !== 0) {
+                setFlash('error', 'Invalid file path.');
+                redirect(EMPLOYEE_VIEW_URL . $employeeId);
+            }
             
             if (move_uploaded_file($_FILES['document_file']['tmp_name'], APP_ROOT . '/' . $filePath)) {
                 $stmt = $db->prepare("INSERT INTO employee_documents (employee_id, document_type, document_name, file_path, file_size, file_type, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?)");

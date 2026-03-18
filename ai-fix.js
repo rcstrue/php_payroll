@@ -9,23 +9,28 @@ const fs = require('fs');
 const path = require('path');
 
 // Load environment variables from .env file
-try {
-    const envPath = path.join(process.cwd(), '.env');
-    if (fs.existsSync(envPath)) {
-        const envContent = fs.readFileSync(envPath, 'utf8');
-        envContent.split('\n').forEach(line => {
-            const [key, ...valueParts] = line.split('=');
-            if (key && valueParts.length > 0 && !key.startsWith('#')) {
-                const value = valueParts.join('=').trim();
-                if (!process.env[key.trim()]) {
-                    process.env[key.trim()] = value;
+function loadEnvFile() {
+    try {
+        const envPath = path.join(process.cwd(), '.env');
+        if (fs.existsSync(envPath)) {
+            const envContent = fs.readFileSync(envPath, 'utf8');
+            envContent.split('\n').forEach(line => {
+                const [key, ...valueParts] = line.split('=');
+                if (key && valueParts.length > 0 && !key.startsWith('#')) {
+                    const value = valueParts.join('=').trim();
+                    if (!process.env[key.trim()]) {
+                        process.env[key.trim()] = value;
+                    }
                 }
-            }
-        });
+            });
+        }
+    } catch (e) {
+        // Ignore .env loading errors
     }
-} catch (e) {
-    // Ignore .env loading errors
 }
+
+// Initialize environment and SDK
+loadEnvFile();
 
 // Check for API key - will run auto-fixes even without it
 const hasAPIKey = !!process.env.ZAI_API_KEY && process.env.ZAI_API_KEY !== 'your_api_key_here';
@@ -42,8 +47,6 @@ if (hasAPIKey) {
 } else {
     console.log('ℹ️ ZAI_API_KEY not set. Using auto-fix patterns only (AI disabled).');
 }
-
-const SEVERITY_ORDER = { 'BLOCKER': 1, 'CRITICAL': 2, 'MAJOR': 3, 'MINOR': 4 };
 
 /**
  * Load SonarCloud issues from JSON file
@@ -70,12 +73,7 @@ function loadSonarIssues() {
  */
 function getFileContent(filePath) {
     const fullPath = path.join(process.cwd(), filePath);
-
-    if (!fs.existsSync(fullPath)) {
-        return null;
-    }
-
-    return fs.readFileSync(fullPath, 'utf8');
+    return fs.existsSync(fullPath) ? fs.readFileSync(fullPath, 'utf8') : null;
 }
 
 /**
@@ -100,7 +98,6 @@ function groupIssuesByFile(issues) {
     const grouped = {};
 
     for (const issue of issues) {
-        // Extract file path from component
         const component = issue.component || '';
         const filePath = component.replace('rcstrue_php_payroll:', '');
 
@@ -114,16 +111,36 @@ function groupIssuesByFile(issues) {
 }
 
 /**
+ * Check if issue is security-related
+ */
+function isSecurityIssue(issue) {
+    if (issue.type === 'VULNERABILITY') {
+        return true;
+    }
+    if (issue.severity === 'BLOCKER' || issue.severity === 'CRITICAL') {
+        return true;
+    }
+    const msg = (issue.message || '').toLowerCase();
+    return msg.includes('xss') || msg.includes('injection') || 
+           msg.includes('sanitize') || msg.includes('escape') || msg.includes('security');
+}
+
+/**
+ * Filter security issues from all issues
+ */
+function filterSecurityIssues(issues) {
+    return issues.filter(isSecurityIssue);
+}
+
+/**
  * Generate fix prompt for AI
  */
 function generateFixPrompt(filePath, issues, fileContent) {
     const issueList = issues.map(issue => {
-        return `
-- Line ${issue.line || 'unknown'}: ${issue.message}
+        return `- Line ${issue.line || 'unknown'}: ${issue.message}
   Type: ${issue.type}
   Severity: ${issue.severity}
-  Rule: ${issue.rule}
-`;
+  Rule: ${issue.rule}`;
     }).join('\n');
 
     return `You are a PHP security expert. Fix the following SonarCloud security issues in this PHP file.
@@ -149,8 +166,7 @@ FIX RULES:
 8. Use PSR-2 coding style
 
 OUTPUT:
-Return ONLY the corrected PHP code without any explanation or markdown formatting.
-The code should be complete and ready to use.`;
+Return ONLY the corrected PHP code without any explanation or markdown formatting.`;
 }
 
 /**
@@ -166,7 +182,6 @@ function applyAutoFixes(filePath, issues, fileContent) {
         {
             pattern: /echo\s+\$([a-zA-Z_][a-zA-Z0-9_]*)\s*;/g,
             replacement: (match, varName) => {
-                // Skip if already sanitized
                 if (match.includes('htmlspecialchars') || match.includes('sanitize')) {
                     return match;
                 }
@@ -187,7 +202,6 @@ function applyAutoFixes(filePath, issues, fileContent) {
         }
     ];
 
-    // Apply each pattern
     for (const { pattern, replacement } of xssPatterns) {
         content = content.replace(pattern, replacement);
     }
@@ -231,7 +245,91 @@ async function generateAIFix(zai, filePath, issues, fileContent) {
 }
 
 /**
- * Main execution
+ * Process a single file
+ */
+async function processFile(filePath, fileIssues, zai) {
+    console.log(`📄 Processing: ${filePath} (${fileIssues.length} issues)`);
+
+    // Skip non-PHP files
+    if (!filePath.endsWith('.php')) {
+        console.log('   ⏭️  Skipped (not a PHP file)\n');
+        return 0;
+    }
+
+    // Get current file content
+    const fileContent = getFileContent(filePath);
+
+    if (!fileContent) {
+        console.log(`   ⚠️  File not found: ${filePath}\n`);
+        return 0;
+    }
+
+    // Try automatic fixes first
+    const { content: autoFixedContent, fixedCount: autoFixedCount } = applyAutoFixes(filePath, fileIssues, fileContent);
+
+    if (autoFixedCount > 0) {
+        writeFileContent(filePath, autoFixedContent);
+        console.log(`   ✅ Auto-fixed ${autoFixedCount} issues\n`);
+        return autoFixedCount;
+    }
+
+    // If no auto-fixes and AI is available, use AI
+    const hasCriticalIssue = fileIssues.some(i => i.severity === 'BLOCKER' || i.severity === 'CRITICAL');
+    
+    if (zai && hasCriticalIssue) {
+        console.log('   🤖 Using AI to generate fix...');
+
+        const fixedCode = await generateAIFix(zai, filePath, fileIssues, fileContent);
+
+        if (fixedCode && fixedCode !== fileContent) {
+            writeFileContent(filePath, fixedCode);
+            console.log(`   ✅ AI-fixed ${fileIssues.length} issues\n`);
+            return fileIssues.length;
+        }
+        console.log('   ⏭️  No changes needed\n');
+        return 0;
+    }
+
+    console.log('   ⏭️  Skipped (requires manual review)\n');
+    return 0;
+}
+
+/**
+ * Initialize AI SDK
+ */
+async function initializeAI() {
+    if (!ZAI || !hasAPIKey) {
+        return null;
+    }
+    
+    try {
+        const zai = await ZAI.create();
+        console.log('🤖 AI SDK initialized.\n');
+        return zai;
+    } catch (e) {
+        console.log('⚠️ AI SDK initialization failed. Using auto-fix patterns only.\n');
+        return null;
+    }
+}
+
+/**
+ * Generate summary report
+ */
+function generateReport(issues, securityIssues, totalFixed, filesProcessed) {
+    const report = {
+        timestamp: new Date().toISOString(),
+        totalIssues: issues.length,
+        securityIssues: securityIssues.length,
+        fixedIssues: totalFixed,
+        filesProcessed: filesProcessed
+    };
+
+    fs.writeFileSync('ai-fix-report.json', JSON.stringify(report, null, 2));
+    console.log('📊 Report saved to ai-fix-report.json');
+}
+
+/**
+ * Main execution - refactored for lower cognitive complexity
  */
 async function main() {
     console.log('🔧 AI Auto-Fix for SonarCloud Issues');
@@ -248,18 +346,7 @@ async function main() {
     console.log(`📋 Found ${issues.length} issues to process.\n`);
 
     // Filter to only security-related issues
-    const securityIssues = issues.filter(issue =>
-        issue.type === 'VULNERABILITY' ||
-        issue.severity === 'BLOCKER' ||
-        issue.severity === 'CRITICAL' ||
-        (issue.message && (
-            issue.message.toLowerCase().includes('xss') ||
-            issue.message.toLowerCase().includes('injection') ||
-            issue.message.toLowerCase().includes('sanitize') ||
-            issue.message.toLowerCase().includes('escape') ||
-            issue.message.toLowerCase().includes('security')
-        ))
-    );
+    const securityIssues = filterSecurityIssues(issues);
 
     console.log(`🔒 ${securityIssues.length} security-related issues found.\n`);
 
@@ -271,78 +358,19 @@ async function main() {
     // Group issues by file
     const groupedIssues = groupIssuesByFile(securityIssues);
 
-    // Initialize AI (only if SDK is available)
-    let zai = null;
-    if (ZAI && hasAPIKey) {
-        try {
-            zai = await ZAI.create();
-            console.log('🤖 AI SDK initialized.\n');
-        } catch (e) {
-            console.log('⚠️ AI SDK initialization failed. Using auto-fix patterns only.\n');
-        }
-    }
-
-    let totalFixed = 0;
+    // Initialize AI
+    const zai = await initializeAI();
 
     // Process each file
+    let totalFixed = 0;
     for (const [filePath, fileIssues] of Object.entries(groupedIssues)) {
-        console.log(`📄 Processing: ${filePath} (${fileIssues.length} issues)`);
-
-        // Skip non-PHP files
-        if (!filePath.endsWith('.php')) {
-            console.log('   ⏭️  Skipped (not a PHP file)\n');
-            continue;
-        }
-
-        // Get current file content
-        const fileContent = getFileContent(filePath);
-
-        if (!fileContent) {
-            console.log(`   ⚠️  File not found: ${filePath}\n`);
-            continue;
-        }
-
-        // Try automatic fixes first
-        const { content: autoFixedContent, fixedCount: autoFixedCount } = applyAutoFixes(filePath, fileIssues, fileContent);
-
-        if (autoFixedCount > 0) {
-            writeFileContent(filePath, autoFixedContent);
-            totalFixed += autoFixedCount;
-            console.log(`   ✅ Auto-fixed ${autoFixedCount} issues\n`);
-            continue;
-        }
-
-        // If no auto-fixes and AI is available, use AI
-        if (zai && fileIssues.some(i => i.severity === 'BLOCKER' || i.severity === 'CRITICAL')) {
-            console.log('   🤖 Using AI to generate fix...');
-
-            const fixedCode = await generateAIFix(zai, filePath, fileIssues, fileContent);
-
-            if (fixedCode && fixedCode !== fileContent) {
-                writeFileContent(filePath, fixedCode);
-                totalFixed += fileIssues.length;
-                console.log(`   ✅ AI-fixed ${fileIssues.length} issues\n`);
-            } else {
-                console.log('   ⏭️  No changes needed\n');
-            }
-        } else {
-            console.log('   ⏭️  Skipped (requires manual review)\n');
-        }
+        totalFixed += await processFile(filePath, fileIssues, zai);
     }
 
     console.log(`\n🎉 Total issues fixed: ${totalFixed}`);
 
     // Generate summary report
-    const report = {
-        timestamp: new Date().toISOString(),
-        totalIssues: issues.length,
-        securityIssues: securityIssues.length,
-        fixedIssues: totalFixed,
-        filesProcessed: Object.keys(groupedIssues).length
-    };
-
-    fs.writeFileSync('ai-fix-report.json', JSON.stringify(report, null, 2));
-    console.log('📊 Report saved to ai-fix-report.json');
+    generateReport(issues, securityIssues, totalFixed, Object.keys(groupedIssues).length);
 }
 
 // Run main function
