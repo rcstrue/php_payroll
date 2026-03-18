@@ -459,7 +459,7 @@ class Employee {
             'status' => STATUS_REMOVED,
             'date_of_leaving' => date(DATE_FORMAT_DB),
             'updated_at' => date(DATETIME_FORMAT_DB)
-        ], 'id = :id', ['id' => $id]);
+        ], SQL_WHERE_ID, ['id' => $id]);
 
         return ['success' => true, 'message' => MSG_RECORD_DELETED];
     }
@@ -471,7 +471,7 @@ class Employee {
             'approved_at' => date(DATETIME_FORMAT_DB),
             'approved_by' => $approvedBy,
             'updated_at' => date(DATETIME_FORMAT_DB)
-        ], 'id = :id', ['id' => $id]);
+        ], SQL_WHERE_ID, ['id' => $id]);
     }
 
     // Generate UUID v4

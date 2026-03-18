@@ -14,6 +14,11 @@
 define('BONUS_PAGE_URL', 'index.php?page=payroll/bonus');
 define('DATETIME_FORMAT_SQL', 'Y-m-d H:i:s');
 
+// Use SQL_WHERE_ID constant if available, otherwise define it
+if (!defined('SQL_WHERE_ID')) {
+    define('SQL_WHERE_ID', 'id = :id');
+}
+
 $pageTitle = 'Bonus Calculation';
 $page = 'payroll/bonus';
 
@@ -161,7 +166,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         'bonus_amount' => $record['bonus_amount'],
                         'status' => 'calculated',
                         'updated_at' => date(DATETIME_FORMAT_SQL)
-                    ], 'id = :id', ['id' => $existing['id']]);
+                    ], SQL_WHERE_ID, ['id' => $existing['id']]);
                 } else {
                     // Insert
                     $db->insert('employee_bonus', [
@@ -236,7 +241,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 'bonus' => $existingPayroll['bonus'] + $bonus['bonus_amount'],
                 'net_salary' => $existingPayroll['net_salary'] + $bonus['bonus_amount'],
                 'updated_at' => date(DATETIME_FORMAT_SQL)
-            ], 'id = :id', ['id' => $existingPayroll['id']]);
+            ], SQL_WHERE_ID, ['id' => $existingPayroll['id']]);
         } else {
             $db->insert('payroll', [
                 'payroll_period_id' => $periodId,
@@ -253,7 +258,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             'status' => 'disbursed',
             'disbursed_at' => date(DATETIME_FORMAT_SQL),
             'payment_period_id' => $periodId
-        ], 'id = :id', ['id' => $bonusId]);
+        ], SQL_WHERE_ID, ['id' => $bonusId]);
         
         setFlash('success', 'Bonus added to payroll for disbursement');
         redirect(BONUS_PAGE_URL);

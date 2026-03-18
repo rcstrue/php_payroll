@@ -218,7 +218,7 @@ class Payroll {
         }
         
         if (!empty($filters['client_name'])) {
-            $sql .= " AND e.client_name = :client_name";
+            $sql .= SQL_FILTER_CLIENT_NAME;
             $params['client_name'] = $filters['client_name'];
         }
         
@@ -449,7 +449,7 @@ class Payroll {
             'status' => 'Processed',
             'processed_by' => $_SESSION['user_id'] ?? null,
             'processed_at' => date('Y-m-d H:i:s')
-        ], 'id = :id', ['id' => $periodId]);
+        ], SQL_WHERE_ID, ['id' => $periodId]);
         
         return [
             'success' => true,
@@ -512,7 +512,7 @@ class Payroll {
             'status' => 'Approved',
             'approved_by' => $approvedBy,
             'approved_at' => date('Y-m-d H:i:s')
-        ], 'id = :id', ['id' => $periodId]);
+        ], SQL_WHERE_ID, ['id' => $periodId]);
         
         // Update all payroll records status
         $this->db->query(
@@ -528,7 +528,7 @@ class Payroll {
         $this->db->update('payroll_periods', [
             'status' => 'Paid',
             'payment_date' => $paymentDate
-        ], 'id = :id', ['id' => $periodId]);
+        ], SQL_WHERE_ID, ['id' => $periodId]);
         
         $this->db->query(
             "UPDATE payroll SET status = 'Paid', payment_status = 'Paid' WHERE payroll_period_id = :period_id",
@@ -609,7 +609,7 @@ class Payroll {
         }
         
         if (!empty($filters['client_name'])) {
-            $sql .= " AND e.client_name = :client_name";
+            $sql .= SQL_FILTER_CLIENT_NAME;
             $params['client_name'] = $filters['client_name'];
         }
         
@@ -670,7 +670,7 @@ class Payroll {
             'status' => 'Draft',
             'processed_by' => null,
             'processed_at' => null
-        ], 'id = :id', ['id' => $periodId]);
+        ], SQL_WHERE_ID, ['id' => $periodId]);
         
         return ['success' => true, 'message' => 'Payroll deleted.'];
     }
