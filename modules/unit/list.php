@@ -145,7 +145,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Get all clients for dropdown
-$clients = $client->getList();
+// NOTE: Directly query to handle both 'name' and 'client_name' column variations
+try {
+    // Check which column exists in clients table
+    $colCheck = $db->query("SHOW COLUMNS FROM clients LIKE 'name'");
+    $nameCol = ($colCheck && $colCheck->rowCount() > 0) ? 'name' : 'client_name';
+    $clients = $db->query("SELECT id, {$nameCol} as name, client_code FROM clients WHERE is_active = 1 ORDER BY {$nameCol}")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    // Fallback: try with client_name if name check fails
+    try {
+        $clients = $db->query("SELECT id, client_name as name, client_code FROM clients WHERE is_active = 1 ORDER BY client_name")->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Exception $e2) {
+        $clients = [];
+    }
+}
 
 // Get units
 $units = $unit->getAll($clientFilter ?: null, false);
