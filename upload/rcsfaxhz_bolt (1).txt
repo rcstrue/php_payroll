@@ -1,0 +1,629 @@
+===Database rcsfaxhz_bolt
+
+== Table structure for table admin_users
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|**email**|varchar(255)|No|
+|password|varchar(255)|No|
+|role|enum('admin', 'manager')|No|manager
+|created_at|timestamp|No|current_timestamp()
+|updated_at|timestamp|No|current_timestamp()
+== Table structure for table attendance_summary
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|**employee_id**|int(11)|No|
+|**month**|int(11)|No|
+|**year**|int(11)|No|
+|total_present|decimal(5,2)|Yes|0.00
+|total_extra|decimal(5,2)|Yes|0.00
+|overtime_hours|decimal(6,2)|Yes|0.00
+|total_wo|int(3)|Yes|0
+|source|enum('Manual', 'Excel Upload')|Yes|Manual
+|unit_id|int(11)|Yes|NULL
+|created_at|timestamp|No|current_timestamp()
+|updated_at|timestamp|No|current_timestamp()
+== Table structure for table audit_log
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|user_id|int(11)|Yes|NULL
+|action|varchar(100)|No|
+|module|varchar(50)|Yes|NULL
+|record_id|int(11)|Yes|NULL
+|old_values|text|Yes|NULL
+|new_values|text|Yes|NULL
+|ip_address|varchar(45)|Yes|NULL
+|created_at|timestamp|No|current_timestamp()
+== Table structure for table clients
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|**client_code**|varchar(20)|No|
+|name|varchar(100)|No|
+|address|text|Yes|NULL
+|city|varchar(100)|Yes|NULL
+|state|varchar(100)|Yes|NULL
+|pincode|varchar(10)|Yes|NULL
+|gst_number|varchar(20)|Yes|NULL
+|contact_person|varchar(100)|Yes|NULL
+|contact_phone|varchar(20)|Yes|NULL
+|contact_email|varchar(100)|Yes|NULL
+|is_active|tinyint(1)|Yes|1
+|created_at|timestamp|No|current_timestamp()
+|updated_at|timestamp|No|current_timestamp()
+== Table structure for table companies
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|company_name|varchar(255)|No|
+|address|text|Yes|NULL
+|city|varchar(100)|Yes|NULL
+|state|varchar(100)|Yes|NULL
+|pincode|varchar(10)|Yes|NULL
+|gst_number|varchar(20)|Yes|NULL
+|pan_number|varchar(10)|Yes|NULL
+|contact_email|varchar(100)|Yes|NULL
+|contact_phone|varchar(20)|Yes|NULL
+|logo_path|varchar(255)|Yes|NULL
+|created_at|timestamp|No|current_timestamp()
+|updated_at|timestamp|No|current_timestamp()
+== Table structure for table compliance_calendar
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|compliance_type|enum('PF', 'ESI', 'PT', 'LWF', 'Bonus', 'Gratuity', 'Other')|No|
+|compliance_name|varchar(100)|No|
+|due_date|date|No|
+|frequency|enum('Monthly', 'Quarterly', 'Half-Yearly', 'Yearly', 'One-time')|Yes|Monthly
+|state_id|int(11)|Yes|NULL
+|form_number|varchar(20)|Yes|NULL
+|description|text|Yes|NULL
+|is_active|tinyint(1)|Yes|1
+|created_at|timestamp|No|current_timestamp()
+== Table structure for table compliance_filings
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|compliance_type|enum('PF', 'ESI', 'PT', 'LWF', 'Bonus', 'Gratuity', 'Other')|No|
+|filing_period_month|int(11)|Yes|NULL
+|filing_period_year|int(11)|Yes|NULL
+|due_date|date|Yes|NULL
+|filed_date|date|Yes|NULL
+|status|enum('Pending', 'Filed', 'Approved', 'Rejected')|Yes|Pending
+|filed_by|int(11)|Yes|NULL
+|reference_number|varchar(100)|Yes|NULL
+|challan_number|varchar(100)|Yes|NULL
+|challan_date|date|Yes|NULL
+|amount_paid|decimal(12,2)|Yes|0.00
+|remarks|text|Yes|NULL
+|created_at|timestamp|No|current_timestamp()
+== Table structure for table contracts
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|**contract_number**|varchar(50)|No|
+|client_id|int(11)|No|
+|unit_id|int(11)|Yes|NULL
+|contract_type|enum('manpower', 'housekeeping', 'security', 'other')|Yes|manpower
+|start_date|date|No|
+|end_date|date|Yes|NULL
+|billing_cycle|enum('monthly', 'fortnightly', 'weekly')|Yes|monthly
+|service_charges|decimal(10,2)|Yes|0.00
+|service_charges_type|enum('percentage', 'fixed')|Yes|percentage
+|gst_applicable|tinyint(1)|Yes|1
+|terms_conditions|text|Yes|NULL
+|is_active|tinyint(1)|Yes|1
+|created_at|timestamp|No|current_timestamp()
+|updated_at|timestamp|No|current_timestamp()
+== Table structure for table designations
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|**name**|varchar(255)|No|
+|created_at|timestamp|No|current_timestamp()
+|desi_view|tinyint(1)|Yes|1
+== Table structure for table employees
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(10)|No|
+|**mobile_number**|varchar(15)|No|
+|alternate_mobile|varchar(15)|Yes|NULL
+|full_name|varchar(255)|Yes|NULL
+|father_name|varchar(255)|Yes|NULL
+|date_of_birth|date|Yes|NULL
+|gender|varchar(20)|Yes|NULL
+|aadhaar_number|varchar(20)|Yes|NULL
+|email|varchar(255)|Yes|NULL
+|uan_number|varchar(50)|Yes|NULL
+|esic_number|varchar(50)|Yes|NULL
+|marital_status|varchar(30)|Yes|NULL
+|blood_group|varchar(10)|Yes|NULL
+|address|text|Yes|NULL
+|pin_code|varchar(10)|Yes|NULL
+|state|varchar(100)|Yes|NULL
+|district|varchar(100)|Yes|NULL
+|bank_name|varchar(255)|Yes|NULL
+|account_number|varchar(50)|Yes|NULL
+|ifsc_code|varchar(20)|Yes|NULL
+|account_holder_name|varchar(255)|Yes|NULL
+|client_id|int(11)|Yes|NULL
+|unit_id|int(11)|Yes|NULL
+|date_of_joining|date|Yes|NULL
+|confirmation_date|date|Yes|NULL
+|probation_period|int(11)|Yes|3
+|date_of_leaving|date|Yes|NULL
+|profile_pic_url|text|Yes|NULL
+|profile_pic_cropped_url|text|Yes|NULL
+|aadhaar_front_url|text|Yes|NULL
+|aadhaar_back_url|text|Yes|NULL
+|bank_document_url|text|Yes|NULL
+|status|varchar(50)|Yes|pending_hr_verification
+|profile_completion|int(11)|Yes|0
+|employee_role|enum('admin', 'manager', 'employee')|Yes|employee
+|manager_edits_pending|tinyint(1)|Yes|0
+|nominee_name|varchar(255)|Yes|NULL
+|nominee_relationship|varchar(100)|Yes|NULL
+|nominee_dob|date|Yes|NULL
+|nominee_contact|varchar(15)|Yes|NULL
+|emergency_contact_name|varchar(100)|Yes|NULL
+|emergency_contact_relation|varchar(50)|Yes|NULL
+|approved_at|timestamp|Yes|NULL
+|approved_by|varchar(36)|Yes|NULL
+|created_at|timestamp|No|current_timestamp()
+|updated_at|timestamp|No|current_timestamp()
+|designation|varchar(36)|Yes|NULL
+|department|varchar(100)|Yes|NULL
+|employment_type|enum('Permanent', 'Temporary', 'Contract', 'Daily Wages')|Yes|Contract
+|worker_category|enum('Skilled', 'Semi-Skilled', 'Unskilled', 'Supervisor', 'Manager', 'Other')|Yes|Unskilled
+|**employee_code**|int(10)|No|
+== Table structure for table employee_advances
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|**employee_id**|varchar(36)|No|
+|unit_id|int(11)|Yes|NULL
+|**month**|int(2)|No|
+|**year**|int(4)|No|
+|adv1|decimal(10,2)|Yes|0.00
+|adv2|decimal(10,2)|Yes|0.00
+|office_advance|decimal(10,2)|Yes|0.00
+|dress_advance|decimal(10,2)|Yes|0.00
+|remarks|text|Yes|NULL
+|created_at|timestamp|No|current_timestamp()
+|updated_at|timestamp|No|current_timestamp()
+== Table structure for table employee_documents
+
+|------
+|Column|Type|Null|Default
+|------
+|id|int(11)|No|
+|employee_id|int(11)|No|
+|document_type|enum('Aadhaar Card', 'PAN Card', 'Voter ID', 'Driving License', 'Passport', 'Bank Passbook', 'Photo', 'Signature', 'Police Verification', 'Education Certificate', 'Experience Certificate', 'Medical Certificate', 'Other')|No|
+|document_name|varchar(255)|Yes|NULL
+|file_path|varchar(255)|No|
+|file_size|int(11)|Yes|NULL
+|file_type|varchar(50)|Yes|NULL
+|uploaded_by|int(11)|Yes|NULL
+|verified|tinyint(1)|Yes|0
+|verified_by|int(11)|Yes|NULL
+|verified_at|datetime|Yes|NULL
+|created_at|timestamp|No|current_timestamp()
+== Table structure for table employee_salary_structures
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|employee_id|varchar(36)|No|
+|effective_from|date|No|
+|effective_to|date|Yes|NULL
+|basic_wage|decimal(12,2)|Yes|0.00
+|da|decimal(12,2)|Yes|0.00
+|hra|decimal(12,2)|Yes|0.00
+|conveyance|decimal(12,2)|Yes|0.00
+|medical_allowance|decimal(12,2)|Yes|0.00
+|special_allowance|decimal(12,2)|Yes|0.00
+|other_allowance|decimal(12,2)|Yes|0.00
+|gross_salary|decimal(12,2)|Yes|0.00
+|pf_applicable|tinyint(1)|Yes|1
+|esi_applicable|tinyint(1)|Yes|1
+|pt_applicable|tinyint(1)|Yes|1
+|lwf_applicable|tinyint(1)|Yes|1
+|bonus_applicable|tinyint(1)|Yes|1
+|gratuity_applicable|tinyint(1)|Yes|1
+|overtime_applicable|tinyint(1)|Yes|1
+|created_at|timestamp|No|current_timestamp()
+|updated_at|timestamp|No|current_timestamp()
+== Table structure for table epfo_members
+
+|------
+|Column|Type|Null|Default
+|------
+|//**uan**//|varchar(50)|No|
+|member_id|varchar(50)|Yes|NULL
+|name|varchar(150)|Yes|NULL
+|gender|varchar(36)|Yes|NULL
+|dob|varchar(20)|Yes|NULL
+|doj|varchar(20)|Yes|NULL
+|father_husband_name|varchar(150)|Yes|NULL
+|relation|varchar(50)|Yes|NULL
+|marital_status|varchar(50)|Yes|NULL
+|mobile|varchar(20)|Yes|NULL
+|email|varchar(100)|Yes|NULL
+|aadhaar|varchar(20)|Yes|NULL
+|pan|varchar(20)|Yes|NULL
+|bank_account|varchar(50)|Yes|NULL
+|ifsc_code|varchar(20)|Yes|NULL
+|nomination_filed|varchar(10)|Yes|NULL
+|aadhaar_verified|varchar(10)|Yes|NULL
+|face_auth_status|varchar(20)|Yes|NULL
+== Table structure for table esi_rates
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|effective_from|date|No|
+|employee_share|decimal(5,2)|Yes|0.75
+|employer_share|decimal(5,2)|Yes|3.25
+|wage_ceiling|decimal(10,2)|Yes|21000.00
+|is_active|tinyint(1)|Yes|1
+|created_at|timestamp|No|current_timestamp()
+== Table structure for table holidays
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|state_id|int(11)|Yes|NULL
+|holiday_name|varchar(100)|No|
+|holiday_date|date|No|
+|holiday_type|enum('National', 'State', 'Local', 'Optional')|Yes|National
+|is_recurring|tinyint(1)|Yes|0
+|created_at|timestamp|No|current_timestamp()
+== Table structure for table industries
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|industry_name|varchar(255)|No|
+|**industry_code**|varchar(20)|No|
+|category|varchar(100)|Yes|NULL
+|schedule|varchar(50)|Yes|NULL
+|is_active|tinyint(1)|Yes|1
+== Table structure for table lwf_rates
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|state_id|int(11)|No|
+|effective_from|date|No|
+|employee_share|decimal(10,2)|Yes|0.00
+|employer_share|decimal(10,2)|Yes|0.00
+|contribution_frequency|enum('Monthly', 'Quarterly', 'Half-Yearly', 'Yearly')|Yes|Yearly
+|contribution_months|varchar(100)|Yes|NULL
+|is_active|tinyint(1)|Yes|1
+|created_at|timestamp|No|current_timestamp()
+== Table structure for table minimum_wages
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|state_id|int(11)|No|
+|zone_id|int(11)|Yes|NULL
+|industry_id|int(11)|Yes|NULL
+|effective_from|date|No|
+|effective_to|date|Yes|NULL
+|worker_category|enum('Unskilled', 'Semi-Skilled', 'Skilled', 'Highly Skilled', 'Supervisor', 'Clerical')|No|
+|basic_per_day|decimal(10,2)|Yes|0.00
+|basic_per_month|decimal(10,2)|Yes|0.00
+|da_per_day|decimal(10,2)|Yes|0.00
+|da_per_month|decimal(10,2)|Yes|0.00
+|special_allowance_per_day|decimal(10,2)|Yes|0.00
+|special_allowance_per_month|decimal(10,2)|Yes|0.00
+|total_per_day|decimal(10,2)|Yes|0.00
+|total_per_month|decimal(10,2)|Yes|0.00
+|hra_percent|decimal(5,2)|Yes|0.00
+|notification_number|varchar(100)|Yes|NULL
+|notification_date|date|Yes|NULL
+|is_active|tinyint(1)|Yes|1
+|created_at|timestamp|No|current_timestamp()
+|updated_at|timestamp|No|current_timestamp()
+== Table structure for table notifications
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|user_id|int(11)|Yes|NULL
+|notification_type|enum('Compliance', 'Payroll', 'System', 'Update', 'Alert')|No|
+|title|varchar(255)|No|
+|message|text|Yes|NULL
+|link|varchar(255)|Yes|NULL
+|is_read|tinyint(1)|Yes|0
+|created_at|timestamp|No|current_timestamp()
+== Table structure for table payroll
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|**payroll_period_id**|int(11)|No|
+|**employee_id**|int(11)|No|
+|unit_id|int(11)|Yes|NULL
+|total_days|int(11)|Yes|0
+|paid_days|decimal(5,2)|Yes|0.00
+|unpaid_days|decimal(5,2)|Yes|0.00
+|overtime_hours|decimal(6,2)|Yes|0.00
+|basic|decimal(10,2)|Yes|0.00
+|da|decimal(10,2)|Yes|0.00
+|hra|decimal(10,2)|Yes|0.00
+|conveyance|decimal(10,2)|Yes|0.00
+|medical_allowance|decimal(10,2)|Yes|0.00
+|special_allowance|decimal(10,2)|Yes|0.00
+|other_allowance|decimal(10,2)|Yes|0.00
+|overtime_amount|decimal(10,2)|Yes|0.00
+|gross_earnings|decimal(10,2)|Yes|0.00
+|pf_employee|decimal(10,2)|Yes|0.00
+|esi_employee|decimal(10,2)|Yes|0.00
+|professional_tax|decimal(10,2)|Yes|0.00
+|lwf_employee|decimal(10,2)|Yes|0.00
+|tds|decimal(10,2)|Yes|0.00
+|salary_advance|decimal(10,2)|Yes|0.00
+|other_deduction|decimal(10,2)|Yes|0.00
+|total_deductions|decimal(10,2)|Yes|0.00
+|pf_employer|decimal(10,2)|Yes|0.00
+|eps_employer|decimal(10,2)|Yes|0.00
+|edlis_employer|decimal(10,2)|Yes|0.00
+|epf_admin_charges|decimal(10,2)|Yes|0.00
+|esi_employer|decimal(10,2)|Yes|0.00
+|lwf_employer|decimal(10,2)|Yes|0.00
+|bonus_provision|decimal(10,2)|Yes|0.00
+|gratuity_provision|decimal(10,2)|Yes|0.00
+|total_employer_contribution|decimal(10,2)|Yes|0.00
+|net_pay|decimal(10,2)|Yes|0.00
+|gross_salary|decimal(10,2)|Yes|0.00
+|ctc|decimal(10,2)|Yes|0.00
+|payment_mode|enum('Bank Transfer', 'Cash', 'Cheque')|Yes|Bank Transfer
+|payment_status|enum('Pending', 'Processing', 'Paid', 'Failed')|Yes|Pending
+|status|enum('Draft', 'Processed', 'Approved', 'Paid', 'Hold')|Yes|Draft
+|created_at|timestamp|No|current_timestamp()
+|updated_at|timestamp|No|current_timestamp()
+== Table structure for table payroll_periods
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|period_name|varchar(50)|No|
+|**month**|int(11)|No|
+|**year**|int(11)|No|
+|start_date|date|No|
+|end_date|date|No|
+|pay_days|int(11)|Yes|31
+|status|enum('Draft', 'Processing', 'Processed', 'Approved', 'Paid', 'Locked')|Yes|Draft
+|processed_by|int(11)|Yes|NULL
+|processed_at|datetime|Yes|NULL
+|approved_by|int(11)|Yes|NULL
+|approved_at|datetime|Yes|NULL
+|payment_date|date|Yes|NULL
+|created_at|timestamp|No|current_timestamp()
+|updated_at|timestamp|No|current_timestamp()
+== Table structure for table payroll_records
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|period_id|int(11)|No|
+|employee_id|int(11)|No|
+|paid_days|decimal(5,2)|Yes|0.00
+|basic_wage|decimal(12,2)|Yes|0.00
+|da|decimal(12,2)|Yes|0.00
+|hra|decimal(12,2)|Yes|0.00
+|gross_earnings|decimal(12,2)|Yes|0.00
+|pf_employee|decimal(12,2)|Yes|0.00
+|esi_employee|decimal(12,2)|Yes|0.00
+|pt|decimal(12,2)|Yes|0.00
+|advance_deduction|decimal(12,2)|Yes|0.00
+|other_deductions|decimal(12,2)|Yes|0.00
+|total_deductions|decimal(12,2)|Yes|0.00
+|net_pay|decimal(12,2)|Yes|0.00
+|pf_employer|decimal(12,2)|Yes|0.00
+|esi_employer|decimal(12,2)|Yes|0.00
+|status|enum('Draft', 'Processed', 'Paid')|Yes|Draft
+|created_at|timestamp|No|current_timestamp()
+== Table structure for table payslip_templates
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|template_name|varchar(100)|No|
+|**template_code**|varchar(20)|No|
+|template_html|text|Yes|NULL
+|template_css|text|Yes|NULL
+|is_default|tinyint(1)|Yes|0
+|is_active|tinyint(1)|Yes|1
+|created_at|timestamp|No|current_timestamp()
+== Table structure for table pfdatabase
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|**uan**|bigint(20)|No|
+|member_id|varchar(50)|No|
+|name|varchar(100)|No|
+|gender|enum('MALE', 'FEMALE', 'OTHER')|Yes|NULL
+|dob|date|Yes|NULL
+|doj|date|Yes|NULL
+|father_husband_name|varchar(100)|Yes|NULL
+|relation|enum('FATHER', 'HUSBAND')|Yes|NULL
+|marital_status|enum('SINGLE', 'MARRIED', 'DIVORCED', 'WIDOW')|Yes|NULL
+|mobile|varchar(15)|Yes|NULL
+|email_id|varchar(100)|Yes|NULL
+|aadhaar|varchar(20)|Yes|NULL
+|pan|varchar(20)|Yes|NULL
+|bank_account_no|varchar(30)|Yes|NULL
+|ifsc_code|varchar(15)|Yes|NULL
+|nomination_filed|enum('YES', 'NO')|Yes|NULL
+|is_aadhaar_verified|enum('YES', 'NO')|Yes|NULL
+|face_auth_status|enum('YES', 'NO')|Yes|NULL
+|created_at|timestamp|No|current_timestamp()
+== Table structure for table pf_rates
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|effective_from|date|No|
+|employee_share|decimal(5,2)|Yes|12.00
+|employer_share_pf|decimal(5,2)|Yes|3.67
+|employer_share_eps|decimal(5,2)|Yes|8.33
+|employer_share_edlis|decimal(5,2)|Yes|0.50
+|epf_admin_charges|decimal(5,2)|Yes|0.50
+|wage_ceiling|decimal(10,2)|Yes|15000.00
+|is_active|tinyint(1)|Yes|1
+|created_at|timestamp|No|current_timestamp()
+== Table structure for table professional_tax_rates
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|state_id|int(11)|No|
+|effective_from|date|No|
+|salary_from|decimal(10,2)|No|
+|salary_to|decimal(10,2)|Yes|NULL
+|pt_amount|decimal(10,2)|No|
+|gender_specific|enum('All', 'Male', 'Female')|Yes|All
+|is_active|tinyint(1)|Yes|1
+|created_at|timestamp|No|current_timestamp()
+== Table structure for table roles
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|role_name|varchar(50)|No|
+|**role_code**|varchar(20)|No|
+|description|text|Yes|NULL
+|permissions|text|Yes|NULL
+|level|int(11)|Yes|0
+|is_active|tinyint(1)|Yes|1
+|created_at|timestamp|No|current_timestamp()
+== Table structure for table settings
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|**setting_key**|varchar(100)|No|
+|setting_value|text|Yes|NULL
+|setting_type|enum('general', 'payroll', 'compliance', 'attendance', 'email')|Yes|general
+|description|varchar(255)|Yes|NULL
+|created_at|timestamp|No|current_timestamp()
+|updated_at|timestamp|No|current_timestamp()
+== Table structure for table states
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|state_name|varchar(100)|No|
+|**state_code**|varchar(10)|No|
+|zone_type|enum('Zone', 'Area', 'None')|Yes|Zone
+|pt_applicable|tinyint(1)|Yes|1
+|lwf_applicable|tinyint(1)|Yes|1
+|is_active|tinyint(1)|Yes|1
+== Table structure for table units
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|client_id|int(11)|No|
+|**unit_code**|varchar(20)|No|
+|name|varchar(100)|No|
+|address|text|Yes|NULL
+|city|varchar(100)|Yes|NULL
+|state|varchar(100)|Yes|NULL
+|pincode|varchar(10)|Yes|NULL
+|contact_person|varchar(100)|Yes|NULL
+|contact_phone|varchar(20)|Yes|NULL
+|is_active|tinyint(1)|Yes|1
+|created_at|timestamp|No|current_timestamp()
+|updated_at|timestamp|No|current_timestamp()
+== Table structure for table users
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|**username**|varchar(100)|No|
+|**email**|varchar(100)|No|
+|password|varchar(255)|No|
+|role_id|int(11)|No|
+|employee_id|int(11)|Yes|NULL
+|first_name|varchar(100)|Yes|NULL
+|last_name|varchar(100)|Yes|NULL
+|phone|varchar(20)|Yes|NULL
+|profile_image|varchar(255)|Yes|NULL
+|language|enum('en', 'hi')|Yes|en
+|is_active|tinyint(1)|Yes|1
+|last_login|datetime|Yes|NULL
+|login_attempts|int(11)|Yes|0
+|password_changed_at|datetime|Yes|NULL
+|created_at|timestamp|No|current_timestamp()
+|updated_at|timestamp|No|current_timestamp()
+== Table structure for table user_sessions
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|user_id|int(11)|No|
+|session_token|varchar(255)|No|
+|ip_address|varchar(45)|Yes|NULL
+|user_agent|text|Yes|NULL
+|expires_at|datetime|Yes|NULL
+|created_at|timestamp|No|current_timestamp()
+== Table structure for table zones
+
+|------
+|Column|Type|Null|Default
+|------
+|//**id**//|int(11)|No|
+|**state_id**|int(11)|No|
+|zone_name|varchar(100)|No|
+|**zone_code**|varchar(20)|No|
+|districts|text|Yes|NULL
+|is_active|tinyint(1)|Yes|1
