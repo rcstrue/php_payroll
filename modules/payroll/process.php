@@ -32,8 +32,8 @@ $filterHold = $_GET['salary_hold'] ?? '';
 $searchTerm = $_GET['search'] ?? '';
 
 // Get clients and units for filters
-$clients = $db->fetchAll("SELECT id, name FROM clients WHERE is_active = 1 ORDER BY name");
-$units = $db->fetchAll("SELECT id, name, client_id FROM units WHERE is_active = 1 ORDER BY name");
+$clients = $db->query("SELECT id, name FROM clients WHERE is_active = 1 ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+$units = $db->query("SELECT id, name, client_id FROM units WHERE is_active = 1 ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
 
 // Handle create period
 if (isset($_POST['create_period'])) {
