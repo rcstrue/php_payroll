@@ -335,7 +335,9 @@ include '../../templates/header.php';
                                                     : $words[floor($number / 10) * 10]
                                                     . " " . $words[$number % 10] . " "
                                                     . $digits[$counter] . $plural . " " . $hundred;
-                                            } else $str[] = null;
+                                            } else {
+                                            $str[] = null;
+                                        }
                                         }
                                         $str = array_reverse($str);
                                         $result = implode('', $str);

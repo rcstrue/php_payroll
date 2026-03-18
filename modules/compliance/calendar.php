@@ -88,7 +88,9 @@ $stats = [
                                 }
                             }
                             echo '</tr>';
-                            if ($currentDay > $daysInMonth) break;
+                            if ($currentDay > $daysInMonth) {
+                                break;
+                            }
                         }
                         ?>
                     </tbody>

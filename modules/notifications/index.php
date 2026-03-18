@@ -174,6 +174,9 @@ function tableExists($db, $tableName) {
                                             $icon = 'bi-info-circle';
                                             $iconColor = 'text-info';
                                             break;
+                                        default:
+                                            // Default bell icon for unknown types
+                                            break;
                                     }
                                 }
                                 ?>

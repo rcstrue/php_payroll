@@ -642,7 +642,7 @@ class Compliance {
     // Generate Form V - Register of Workmen
     public function generateFormV($unitId, $month, $year) {
         // Get unit name
-        $unit = $this->db->fetch("SELECT name FROM units WHERE id = :id", ['id' => $unitId]);
+        $unit = $this->db->fetch(SQL_GET_UNIT_NAME, ['id' => $unitId]);
         if (!$unit) {
             return [];
         }
@@ -662,7 +662,7 @@ class Compliance {
     // Generate Form XVI - Muster Roll (Attendance Register)
     public function generateFormXVI($unitId, $month, $year) {
         // Get unit name
-        $unit = $this->db->fetch("SELECT name FROM units WHERE id = :id", ['id' => $unitId]);
+        $unit = $this->db->fetch(SQL_GET_UNIT_NAME, ['id' => $unitId]);
         if (!$unit) {
             return [];
         }
@@ -701,7 +701,7 @@ class Compliance {
     // Generate Form XVII - Register of Wages
     public function generateFormXVII($unitId, $periodId) {
         // Get unit name
-        $unit = $this->db->fetch("SELECT name FROM units WHERE id = :id", ['id' => $unitId]);
+        $unit = $this->db->fetch(SQL_GET_UNIT_NAME, ['id' => $unitId]);
         if (!$unit) {
             return [];
         }

@@ -39,7 +39,9 @@ if ($unitId) {
 
 // Helper function for age calculation
 function calculateAge($dob) {
-    if (empty($dob)) return '-';
+    if (empty($dob)) {
+        return '-';
+    }
     $birth = new DateTime($dob);
     $today = new DateTime();
     return $birth->diff($today)->y;
