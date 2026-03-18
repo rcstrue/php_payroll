@@ -487,9 +487,9 @@ include '../../templates/header.php';
                             $currentFY = date('n') >= 4 ? date('Y') : date('Y') - 1;
                             for ($fy = $currentFY; $fy >= $currentFY - 3; $fy--): 
                             ?>
-                            <option value="<?php echo $fy; ?>-<?php echo $fy+1; ?>">
-                                FY <?php echo $fy; ?>-<?php echo substr($fy+1, -2); ?>
-                            </option>
+                                <option value="<?php echo $fy; ?>-<?php echo $fy+1; ?>">
+                                    FY <?php echo $fy; ?>-<?php echo substr($fy+1, -2); ?>
+                                </option>
                             <?php endfor; ?>
                         </select>
                     </div>

@@ -426,7 +426,7 @@ class Employee {
             $this->db->beginTransaction();
             
             // Update employee
-            $this->db->update('employees', $dbData, 'id = :id', ['id' => $id]);
+            $this->db->update('employees', $dbData, SQL_WHERE_ID, ['id' => $id]);
             
             // Update salary structure if provided and table exists
             if (!empty($salaryData)) {

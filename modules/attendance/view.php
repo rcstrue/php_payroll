@@ -319,9 +319,9 @@ $statuses = ['Present', 'Absent', 'Weekly Off', 'Holiday', 'Paid Leave', 'Unpaid
                                 
                                 for ($i = $startPage; $i <= $endPage; $i++): 
                                 ?>
-                                <li class="page-item <?php echo $i == $page ? 'active' : ''; ?>">
-                                    <a class="page-link" href="?page=attendance/view&month=<?php echo $monthFilter; ?>&year=<?php echo $yearFilter; ?>&client=<?php echo urlencode($clientFilter); ?>&unit=<?php echo urlencode($unitFilter); ?>&status=<?php echo urlencode($statusFilter); ?>&pg=<?php echo $i; ?>"><?php echo $i; ?></a>
-                                </li>
+                                    <li class="page-item <?php echo $i == $page ? 'active' : ''; ?>">
+                                        <a class="page-link" href="?page=attendance/view&month=<?php echo $monthFilter; ?>&year=<?php echo $yearFilter; ?>&client=<?php echo urlencode($clientFilter); ?>&unit=<?php echo urlencode($unitFilter); ?>&status=<?php echo urlencode($statusFilter); ?>&pg=<?php echo $i; ?>"><?php echo $i; ?></a>
+                                    </li>
                                 <?php endfor; ?>
                                 
                                 <?php if ($page < $totalPages): ?>

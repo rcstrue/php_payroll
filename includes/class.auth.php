@@ -4,6 +4,9 @@
  * Handles user authentication, authorization, and session management
  */
 
+// Constant to avoid string duplication
+define('SQL_WHERE_USER_ID', 'id = :id');
+
 class Auth {
     private $db;
     private $user = null;
@@ -81,7 +84,7 @@ class Auth {
         try {
             $this->db->update('users', [
                 'last_login' => date('Y-m-d H:i:s')
-            ], 'id = :id', ['id' => $user['id']]);
+            ], SQL_WHERE_USER_ID, ['id' => $user['id']]);
         } catch (Exception $e) {
             // Ignore if last_login column doesn't exist
         }
@@ -154,7 +157,7 @@ class Auth {
         
         $this->db->update('users', [
             'password' => $hashedPassword
-        ], 'id = :id', ['id' => $userId]);
+        ], SQL_WHERE_USER_ID, ['id' => $userId]);
         
         return ['success' => true, 'message' => 'Password changed successfully.'];
     }
@@ -195,7 +198,7 @@ class Auth {
         
         $result = $this->db->update('users', [
             'password' => $hashedPassword
-        ], 'id = :id', ['id' => $userId]);
+        ], SQL_WHERE_USER_ID, ['id' => $userId]);
         
         if ($result !== false) {
             return ['success' => true, 'message' => 'Password reset successfully.'];
@@ -264,7 +267,7 @@ class Auth {
             return ['success' => false, 'message' => 'No data to update.'];
         }
         
-        $result = $this->db->update('users', $updateData, 'id = :id', ['id' => $userId]);
+        $result = $this->db->update('users', $updateData, SQL_WHERE_USER_ID, ['id' => $userId]);
         
         return ['success' => true, 'message' => 'User updated successfully.'];
     }
@@ -276,7 +279,7 @@ class Auth {
             return ['success' => false, 'message' => 'Cannot delete your own account.'];
         }
         
-        $result = $this->db->delete('users', 'id = :id', ['id' => $userId]);
+        $result = $this->db->delete('users', SQL_WHERE_USER_ID, ['id' => $userId]);
         
         return ['success' => true, 'message' => 'User deleted successfully.'];
     }

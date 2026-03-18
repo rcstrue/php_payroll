@@ -356,7 +356,7 @@ include '../../templates/header.php';
                             $current = '';
                             foreach ($allSlabs as $s): 
                             ?>
-                            <tr>
+                                <tr>
                                 <td><?php echo $current != $s['state'] ? sanitize($s['state']) : ''; ?></td>
                                 <td>
                                     <?php 

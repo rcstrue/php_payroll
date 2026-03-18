@@ -98,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['attendance_file'])) 
                                 $currentYear = date('Y');
                                 for ($y = $currentYear; $y >= $currentYear - 2; $y--):
                                 ?>
-                                <option value="<?php echo $y; ?>"><?php echo $y; ?></option>
+                                    <option value="<?php echo $y; ?>"><?php echo $y; ?></option>
                                 <?php endfor; ?>
                             </select>
                         </div>
@@ -215,9 +215,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['attendance_file'])) 
                             
                             if (empty($recentUploads)):
                             ?>
-                            <tr>
-                                <td colspan="5" class="text-center py-4 text-muted">No uploads yet</td>
-                            </tr>
+                                <tr>
+                                    <td colspan="5" class="text-center py-4 text-muted">No uploads yet</td>
+                                </tr>
                             <?php else: ?>
                             <?php foreach ($recentUploads as $upload): 
                                 $stmt2 = $db->prepare("SELECT name as unit_name FROM units WHERE id = ?");

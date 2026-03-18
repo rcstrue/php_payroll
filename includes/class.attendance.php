@@ -5,6 +5,9 @@
  * Updated for new database schema
  */
 
+// SQL constant to avoid string duplication
+define('SQL_GET_UNIT_NAME', 'SELECT name FROM units WHERE id = :id');
+
 class Attendance {
     private $db;
     
@@ -67,7 +70,7 @@ class Attendance {
     // Get employees for attendance by unit ID
     public function getEmployeesForAttendanceByUnitId($unitId) {
         // First get the unit name
-        $unit = $this->db->fetch("SELECT name FROM units WHERE id = :id", ['id' => $unitId]);
+        $unit = $this->db->fetch(SQL_GET_UNIT_NAME, ['id' => $unitId]);
         if (!$unit) {
             return [];
         }
@@ -94,7 +97,7 @@ class Attendance {
         }
         
         // Get unit name
-        $unit = $this->db->fetch("SELECT name FROM units WHERE id = :id", ['id' => $unitId]);
+        $unit = $this->db->fetch(SQL_GET_UNIT_NAME, ['id' => $unitId]);
         $unitName = $unit ? $unit['name'] : null;
         
         $imported = 0;
@@ -294,7 +297,7 @@ class Attendance {
     
     // Get attendance by unit for a month
     public function getUnitAttendance($unitId, $month, $year) {
-        $unit = $this->db->fetch("SELECT name FROM units WHERE id = :id", ['id' => $unitId]);
+        $unit = $this->db->fetch(SQL_GET_UNIT_NAME, ['id' => $unitId]);
         if (!$unit) {
             return [];
         }

@@ -211,9 +211,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_advance'])) {
                             $currentYear = date('Y');
                             for ($y = $currentYear; $y >= $currentYear - 2; $y--):
                             ?>
-                            <option value="<?php echo $y; ?>" <?php echo $selectedYear == $y ? 'selected' : ''; ?>>
-                                <?php echo $y; ?>
-                            </option>
+                                <option value="<?php echo $y; ?>" <?php echo $selectedYear == $y ? 'selected' : ''; ?>>
+                                    <?php echo $y; ?>
+                                </option>
                             <?php endfor; ?>
                         </select>
                     </div>
@@ -278,7 +278,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_advance'])) {
                                 $sr = 1;
                                 foreach ($employees as $emp): 
                                 ?>
-                                <tr>
+                                    <tr>
                                     <td class="text-center"><?php echo $sr++; ?></td>
                                     <td>
                                         <input type="hidden" name="employee_id[]" value="<?php echo $emp['id']; ?>">

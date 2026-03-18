@@ -515,7 +515,7 @@
                         $notifCount = $notifStmt->fetch(PDO::FETCH_ASSOC)['count'];
                         if ($notifCount > 0):
                         ?>
-                        <span class="notification-badge"><?php echo $notifCount; ?></span>
+                            <span class="notification-badge"><?php echo $notifCount; ?></span>
                         <?php endif; ?>
                     </a>
                     <div class="dropdown-menu dropdown-menu-end notification-dropdown">
@@ -526,7 +526,7 @@
                         $notifications = $notifStmt->fetchAll(PDO::FETCH_ASSOC);
                         if (empty($notifications)):
                         ?>
-                        <div class="dropdown-item text-muted">No notifications</div>
+                            <div class="dropdown-item text-muted">No notifications</div>
                         <?php else: ?>
                         <?php foreach ($notifications as $notif): ?>
                         <a href="<?php echo $notif['link'] ?? '#'; ?>" class="dropdown-item notification-item <?php echo $notif['is_read'] ? '' : 'unread'; ?>">
@@ -580,8 +580,8 @@
     $flash = getFlash();
     if ($flash):
     ?>
-    <div class="alert alert-<?php echo $flash['type'] === 'error' ? 'danger' : $flash['type']; ?> alert-dismissible fade show" role="alert">
-        <?php echo sanitize($flash['message']); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
+        <div class="alert alert-<?php echo $flash['type'] === 'error' ? 'danger' : $flash['type']; ?> alert-dismissible fade show" role="alert">
+            <?php echo sanitize($flash['message']); ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
     <?php endif; ?>
