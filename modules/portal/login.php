@@ -37,8 +37,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                            e.email, e.designation, e.department, e.date_of_joining,
                            e.worker_category, e.status, e.photo_path,
                            e.uan_number, e.esi_number, e.is_pf_applicable, e.is_esi_applicable,
-                           COALESCE(c.name, c.client_name, e.client_name) as client_name,
-                           COALESCE(u.name, u.unit_name, e.unit_name) as unit_name,
+                           c.name as client_name,
+                           u.name as unit_name,
                            ess.basic_wage, ess.da, ess.hra, ess.gross_salary
                     FROM employees e
                     LEFT JOIN employee_salary_structures ess ON e.id = ess.employee_id 

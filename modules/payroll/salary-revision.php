@@ -29,7 +29,7 @@ $unitFilter = isset($_GET['unit']) ? sanitize($_GET['unit']) : '';
 
 // Get clients
 $clients = $db->fetchAll(
-    "SELECT DISTINCT COALESCE(c.name, c.client_name, e.client_name) as client_name 
+    "SELECT DISTINCT c.name as client_name 
      FROM employees e LEFT JOIN clients c ON e.client_id = c.id 
      WHERE e.client_name IS NOT NULL ORDER BY client_name"
 );

@@ -41,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         // Get all eligible employees
         $eligibleEmployees = $db->fetchAll(
             "SELECT e.id, e.employee_code, e.full_name, e.date_of_joining, e.date_of_leaving,
-                    e.is_bonus_applicable, COALESCE(c.name, c.client_name) as client_name,
+                    e.is_bonus_applicable, c.name as client_name,
                     ess.basic_wage, ess.gross_salary
              FROM employees e
              LEFT JOIN employee_salary_structures ess ON e.id = ess.employee_id 
@@ -259,7 +259,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 // Get existing bonus records
 $bonusRecords = $db->fetchAll(
     "SELECT b.*, e.employee_code, e.full_name, 
-            COALESCE(c.name, c.client_name) as client_name
+            c.name as client_name
      FROM employee_bonus b
      JOIN employees e ON b.employee_id = e.id
      LEFT JOIN clients c ON e.client_id = c.id

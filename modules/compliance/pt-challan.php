@@ -43,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             "SELECT e.id, e.employee_code, e.full_name, e.gender,
                     COALESCE(u.state, e.current_state, e.permanent_state) as emp_state,
                     p.gross_salary, p.net_salary, p.pt_employee,
-                    COALESCE(c.name, c.client_name) as client_name
+                    c.name as client_name
              FROM payroll p
              JOIN employees e ON p.employee_id = e.id
              LEFT JOIN clients c ON e.client_id = c.id

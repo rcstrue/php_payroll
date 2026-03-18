@@ -34,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         // Get employee details
         $emp = $db->fetch(
             "SELECT e.*, ess.basic_wage, ess.gross_salary, ess.pf_applicable, ess.esi_applicable, ess.bonus_applicable,
-                    COALESCE(c.name, c.client_name, e.client_name) as client_name
+                    c.name as client_name
              FROM employees e
              LEFT JOIN employee_salary_structures ess ON e.id = ess.employee_id 
                 AND (ess.effective_to IS NULL OR ess.effective_to >= CURDATE())
@@ -186,7 +186,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 // Get employees who are resigning or resigned
 $resigningEmployees = $db->fetchAll(
     "SELECT e.id, e.employee_code, e.full_name, e.date_of_joining, e.date_of_leaving,
-            COALESCE(c.name, c.client_name, e.client_name) as client_name,
+            c.name as client_name,
             ess.gross_salary,
             (SELECT COUNT(*) FROM employee_settlements WHERE employee_id = e.id) as has_settlement
      FROM employees e
@@ -201,7 +201,7 @@ $resigningEmployees = $db->fetchAll(
 // Get existing settlements
 $settlements = $db->fetchAll(
     "SELECT s.*, e.employee_code, e.full_name, 
-            COALESCE(c.name, c.client_name, e.client_name) as client_name
+            c.name as client_name
      FROM employee_settlements s
      JOIN employees e ON s.employee_id = e.id
      LEFT JOIN clients c ON e.client_id = c.id

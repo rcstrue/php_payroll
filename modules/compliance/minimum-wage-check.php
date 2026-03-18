@@ -29,7 +29,7 @@ $showOnlyViolations = isset($_GET['violations']) && $_GET['violations'] == '1';
 
 // Get clients for filter
 $clients = $db->query(
-    "SELECT DISTINCT COALESCE(c.name, c.client_name, e.client_name) as client_name 
+    "SELECT DISTINCT c.name as client_name 
      FROM employees e 
      LEFT JOIN clients c ON e.client_id = c.id 
      WHERE e.client_name IS NOT NULL AND e.client_name != '' 

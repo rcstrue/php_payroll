@@ -238,7 +238,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 // Get existing arrears
 $arrears = $db->fetchAll(
     "SELECT a.*, e.employee_code, e.full_name, 
-            COALESCE(c.name, c.client_name) as client_name
+            c.name as client_name
      FROM employee_arrears a
      JOIN employees e ON a.employee_id = e.id
      LEFT JOIN clients c ON e.client_id = c.id
@@ -248,7 +248,7 @@ $arrears = $db->fetchAll(
 // Get employees for dropdown
 $employees = $db->fetchAll(
     "SELECT e.id, e.employee_code, e.full_name, e.designation,
-            COALESCE(c.name, c.client_name) as client_name
+            c.name as client_name
      FROM employees e
      LEFT JOIN clients c ON e.client_id = c.id
      WHERE e.status = 'active'

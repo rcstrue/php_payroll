@@ -13,19 +13,19 @@ $unitFilter = isset($_GET['unit']) ? sanitize($_GET['unit']) : '';
 $statusFilter = isset($_GET['status']) ? sanitize($_GET['status']) : '';
 
 // Get clients for filter
-$clients = $db->query("SELECT DISTINCT COALESCE(c.name, c.client_name, e.client_name) as client_name FROM employees e LEFT JOIN clients c ON e.client_id = c.id WHERE e.client_name IS NOT NULL AND e.client_name != '' ORDER BY client_name")->fetchAll(PDO::FETCH_ASSOC);
+$clients = $db->query("SELECT DISTINCT c.name as client_name FROM employees e LEFT JOIN clients c ON e.client_id = c.id WHERE e.client_name IS NOT NULL AND e.client_name != '' ORDER BY client_name")->fetchAll(PDO::FETCH_ASSOC);
 
 // Build query
 $where = "pp.month = :month AND pp.year = :year";
 $params = [':month' => $month, ':year' => $year];
 
 if ($clientFilter) {
-    $where .= " AND COALESCE(c.name, c.client_name, e.client_name) = :client";
+    $where .= " AND c.name = :client";
     $params[':client'] = $clientFilter;
 }
 
 if ($unitFilter) {
-    $where .= " AND COALESCE(u.name, u.unit_name, e.unit_name) = :unit";
+    $where .= " AND u.name = :unit";
     $params[':unit'] = $unitFilter;
 }
 
@@ -36,8 +36,8 @@ if ($statusFilter) {
 
 // Get payroll records
 $sql = "SELECT p.*, e.full_name, e.employee_code, e.designation,
-        COALESCE(c.name, c.client_name, e.client_name) as client_name,
-        COALESCE(u.name, u.unit_name, e.unit_name) as unit_name,
+        c.name as client_name,
+        u.name as unit_name,
         pp.period_name
         FROM payroll p
         JOIN employees e ON p.employee_id = e.employee_code
@@ -74,7 +74,7 @@ foreach ($payrollData as $row) {
 // Get units for filter
 $units = [];
 if ($clientFilter) {
-    $stmt = $db->prepare("SELECT DISTINCT COALESCE(u.name, u.unit_name, e.unit_name) as unit_name FROM employees e LEFT JOIN units u ON e.unit_id = u.id WHERE COALESCE(e.client_name, (SELECT name FROM clients WHERE id = e.client_id)) = ? AND (e.unit_name IS NOT NULL OR u.name IS NOT NULL) ORDER BY unit_name");
+    $stmt = $db->prepare("SELECT DISTINCT u.name as unit_name FROM employees e LEFT JOIN units u ON e.unit_id = u.id WHERE COALESCE(e.client_name, (SELECT name FROM clients WHERE id = e.client_id)) = ? AND (e.unit_name IS NOT NULL OR u.name IS NOT NULL) ORDER BY unit_name");
     $stmt->execute([$clientFilter]);
     $units = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }

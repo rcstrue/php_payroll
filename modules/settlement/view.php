@@ -24,7 +24,7 @@ $settlement = $db->fetch(
     "SELECT s.*, e.employee_code, e.full_name, e.father_name, e.date_of_joining, 
             e.date_of_birth, e.designation, e.department, e.uan_number, e.esic_number,
             e.bank_name, e.account_number, e.ifsc_code,
-            COALESCE(c.name, c.client_name, e.client_name) as client_name,
+            c.name as client_name,
             e.unit_name, e.state, e.mobile_number,
             ess.basic_wage, ess.gross_salary
      FROM employee_settlements s
