@@ -4,12 +4,15 @@
  * Marks employee as 'removed' instead of deleting from database
  */
 
+// Define redirect URL constant
+define('EMPLOYEE_LIST_URL', 'index.php?page=employee/list');
+
 // Get employee ID
 $employeeId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 if ($employeeId <= 0) {
     setFlash('error', 'Invalid employee ID');
-    redirect('index.php?page=employee/list');
+    redirect(EMPLOYEE_LIST_URL);
 }
 
 // Get employee details before updating
@@ -17,7 +20,7 @@ $empData = $employee->getById($employeeId);
 
 if (!$empData) {
     setFlash('error', 'Employee not found');
-    redirect('index.php?page=employee/list');
+    redirect(EMPLOYEE_LIST_URL);
 }
 
 // Soft delete - update status to 'removed' instead of deleting
@@ -39,4 +42,4 @@ try {
 }
 
 // Redirect back to employee list
-redirect('index.php?page=employee/list');
+redirect(EMPLOYEE_LIST_URL);

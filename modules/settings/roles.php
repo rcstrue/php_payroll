@@ -6,6 +6,9 @@
 
 $pageTitle = 'Manage Roles';
 
+// Constants to avoid string duplication
+define('ROLES_PAGE_URL', 'index.php?page=settings/roles');
+
 // Get all roles
 $stmt = $db->query("SELECT * FROM roles ORDER BY level DESC");
 $roles = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -117,7 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             setFlash('success', 'Role created successfully!');
         }
-        redirect('index.php?page=settings/roles');
+        redirect(ROLES_PAGE_URL);
     }
     
     if ($action === 'edit' && isset($_POST['role_id'])) {
@@ -146,7 +149,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         logActivity('update', 'roles', $roleId, "Updated role: $roleName");
         
         setFlash('success', 'Role updated successfully!');
-        redirect('index.php?page=settings/roles');
+        redirect(ROLES_PAGE_URL);
     }
     
     if ($action === 'delete' && isset($_POST['role_id'])) {
@@ -173,7 +176,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             setFlash('success', 'Role deleted successfully!');
         }
-        redirect('index.php?page=settings/roles');
+        redirect(ROLES_PAGE_URL);
     }
 }
 ?>

@@ -8,6 +8,9 @@
  * WhatsApp: Using WhatsApp Web QR Scan (Free) or Business API
  */
 
+// Constant to avoid string duplication
+define('REGEX_NON_NUMERIC', '/[^0-9]/');
+
 class Notification {
     private $db;
     private $smsApiKey;
@@ -42,6 +45,9 @@ class Notification {
                 case 'notif_email_pass':
                     $this->emailConfig['pass'] = $s['setting_value'];
                     break;
+                default:
+                    // Ignore unknown settings
+                    break;
             }
         }
     }
@@ -56,7 +62,7 @@ class Notification {
      */
     public function sendSMS($mobile, $message, $templateId = null) {
         // Clean mobile number
-        $mobile = preg_replace('/[^0-9]/', '', $mobile);
+        $mobile = preg_replace(REGEX_NON_NUMERIC, '', $mobile);
         
         if (strlen($mobile) == 10) {
             $mobile = '91' . $mobile;
@@ -113,7 +119,7 @@ class Notification {
     public function sendSMSTextLocal($mobile, $message) {
         $apiKey = $this->smsApiKey ?? 'YOUR_TEXTLOCAL_API_KEY';
         
-        $mobile = preg_replace('/[^0-9]/', '', $mobile);
+        $mobile = preg_replace(REGEX_NON_NUMERIC, '', $mobile);
         if (strlen($mobile) == 10) {
             $mobile = '91' . $mobile;
         }
@@ -273,7 +279,7 @@ class Notification {
      * User can scan QR or click link to send message
      */
     public function generateWhatsAppLink($mobile, $message) {
-        $mobile = preg_replace('/[^0-9]/', '', $mobile);
+        $mobile = preg_replace(REGEX_NON_NUMERIC, '', $mobile);
         if (strlen($mobile) == 10) {
             $mobile = '91' . $mobile;
         }
@@ -290,7 +296,7 @@ class Notification {
      * Or return link for manual sending
      */
     public function sendWhatsApp($mobile, $message, $autoSend = false) {
-        $mobile = preg_replace('/[^0-9]/', '', $mobile);
+        $mobile = preg_replace(REGEX_NON_NUMERIC, '', $mobile);
         if (strlen($mobile) == 10) {
             $mobile = '91' . $mobile;
         }

@@ -234,22 +234,22 @@ include '../../templates/header.php';
                         <div class="col-md-6">
                             <label class="form-label required">Invoice Date</label>
                             <input type="date" name="invoice_date" class="form-control" 
-                                   value="<?php echo sanitize($invoice['invoice_date']); ?>" required>
+                                   value="<?php echo htmlspecialchars($invoice['invoice_date'], ENT_QUOTES, 'UTF-8'); ?>" required>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label required">Due Date</label>
                             <input type="date" name="due_date" class="form-control" 
-                                   value="<?php echo sanitize($invoice['due_date']); ?>" required>
+                                   value="<?php echo htmlspecialchars($invoice['due_date'], ENT_QUOTES, 'UTF-8'); ?>" required>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label required">Period From</label>
                             <input type="date" name="period_from" class="form-control" 
-                                   value="<?php echo sanitize($invoice['period_from']); ?>" required>
+                                   value="<?php echo htmlspecialchars($invoice['period_from'], ENT_QUOTES, 'UTF-8'); ?>" required>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label required">Period To</label>
                             <input type="date" name="period_to" class="form-control" 
-                                   value="<?php echo sanitize($invoice['period_to']); ?>" required>
+                                   value="<?php echo htmlspecialchars($invoice['period_to'], ENT_QUOTES, 'UTF-8'); ?>" required>
                         </div>
                     </div>
                 </div>
@@ -316,11 +316,11 @@ include '../../templates/header.php';
                 <div class="card-body">
                     <div class="mb-3">
                         <label class="form-label">Notes</label>
-                        <textarea name="notes" class="form-control" rows="2"><?php echo sanitize($invoice['notes']); ?></textarea>
+                        <textarea name="notes" class="form-control" rows="2"><?php echo htmlspecialchars($invoice['notes'], ENT_QUOTES, 'UTF-8'); ?></textarea>
                     </div>
                     <div class="mb-0">
                         <label class="form-label">Terms & Conditions</label>
-                        <textarea name="terms_conditions" class="form-control" rows="3"><?php echo sanitize($invoice['terms_conditions']); ?></textarea>
+                        <textarea name="terms_conditions" class="form-control" rows="3"><?php echo htmlspecialchars($invoice['terms_conditions'], ENT_QUOTES, 'UTF-8'); ?></textarea>
                     </div>
                 </div>
             </div>

@@ -43,7 +43,7 @@ $applicant = [
     'preferred_location' => '',
     'source' => 'walk-in',
     'source_reference' => '',
-    'requisition_id' => $_GET['requisition_id'] ?? ''
+    'requisition_id' => isset($_GET['requisition_id']) ? (int)$_GET['requisition_id'] : ''
 ];
 
 // Get open requisitions
@@ -185,17 +185,17 @@ include '../../templates/header.php';
                         <div class="col-md-6">
                             <label class="form-label required">Full Name</label>
                             <input type="text" name="full_name" class="form-control" 
-                                   value="<?php echo sanitize($applicant['full_name']); ?>" required>
+                                   value="<?php echo htmlspecialchars($applicant['full_name'], ENT_QUOTES, 'UTF-8'); ?>" required>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Father's Name</label>
                             <input type="text" name="father_name" class="form-control" 
-                                   value="<?php echo sanitize($applicant['father_name']); ?>">
+                                   value="<?php echo htmlspecialchars($applicant['father_name'], ENT_QUOTES, 'UTF-8'); ?>">
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Date of Birth</label>
                             <input type="date" name="date_of_birth" class="form-control" 
-                                   value="<?php echo sanitize($applicant['date_of_birth']); ?>">
+                                   value="<?php echo htmlspecialchars($applicant['date_of_birth'], ENT_QUOTES, 'UTF-8'); ?>">
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Gender</label>
@@ -229,31 +229,31 @@ include '../../templates/header.php';
                         <div class="col-md-6">
                             <label class="form-label required">Mobile Number</label>
                             <input type="tel" name="mobile_number" class="form-control" 
-                                   value="<?php echo sanitize($applicant['mobile_number']); ?>" required maxlength="10">
+                                   value="<?php echo htmlspecialchars($applicant['mobile_number'], ENT_QUOTES, 'UTF-8'); ?>" required maxlength="10">
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Email</label>
                             <input type="email" name="email" class="form-control" 
-                                   value="<?php echo sanitize($applicant['email']); ?>">
+                                   value="<?php echo htmlspecialchars($applicant['email'], ENT_QUOTES, 'UTF-8'); ?>">
                         </div>
                         <div class="col-12">
                             <label class="form-label">Address</label>
-                            <textarea name="address" class="form-control" rows="2"><?php echo sanitize($applicant['address']); ?></textarea>
+                            <textarea name="address" class="form-control" rows="2"><?php echo htmlspecialchars($applicant['address'], ENT_QUOTES, 'UTF-8'); ?></textarea>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">City</label>
                             <input type="text" name="city" class="form-control" 
-                                   value="<?php echo sanitize($applicant['city']); ?>">
+                                   value="<?php echo htmlspecialchars($applicant['city'], ENT_QUOTES, 'UTF-8'); ?>">
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">State</label>
                             <input type="text" name="state" class="form-control" 
-                                   value="<?php echo sanitize($applicant['state']); ?>">
+                                   value="<?php echo htmlspecialchars($applicant['state'], ENT_QUOTES, 'UTF-8'); ?>">
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Pincode</label>
                             <input type="text" name="pincode" class="form-control" 
-                                   value="<?php echo sanitize($applicant['pincode']); ?>" maxlength="6">
+                                   value="<?php echo htmlspecialchars($applicant['pincode'], ENT_QUOTES, 'UTF-8'); ?>" maxlength="6">
                         </div>
                     </div>
                 </div>
@@ -269,12 +269,12 @@ include '../../templates/header.php';
                         <div class="col-md-6">
                             <label class="form-label">Aadhaar Number</label>
                             <input type="text" name="aadhaar_number" class="form-control" 
-                                   value="<?php echo sanitize($applicant['aadhaar_number']); ?>" maxlength="12">
+                                   value="<?php echo htmlspecialchars($applicant['aadhaar_number'], ENT_QUOTES, 'UTF-8'); ?>" maxlength="12">
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">PAN Number</label>
                             <input type="text" name="pan_number" class="form-control" 
-                                   value="<?php echo sanitize($applicant['pan_number']); ?>" maxlength="10">
+                                   value="<?php echo htmlspecialchars($applicant['pan_number'], ENT_QUOTES, 'UTF-8'); ?>" maxlength="10">
                         </div>
                     </div>
                 </div>
@@ -290,7 +290,7 @@ include '../../templates/header.php';
                         <div class="col-md-6">
                             <label class="form-label">Qualification</label>
                             <input type="text" name="qualification" class="form-control" 
-                                   value="<?php echo sanitize($applicant['qualification']); ?>" placeholder="e.g., 10th Pass, ITI, Graduate">
+                                   value="<?php echo htmlspecialchars($applicant['qualification'], ENT_QUOTES, 'UTF-8'); ?>" placeholder="e.g., 10th Pass, ITI, Graduate">
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Experience (Years)</label>
@@ -300,12 +300,12 @@ include '../../templates/header.php';
                         <div class="col-md-6">
                             <label class="form-label">Current Employer</label>
                             <input type="text" name="current_employer" class="form-control" 
-                                   value="<?php echo sanitize($applicant['current_employer']); ?>">
+                                   value="<?php echo htmlspecialchars($applicant['current_employer'], ENT_QUOTES, 'UTF-8'); ?>">
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Preferred Location</label>
                             <input type="text" name="preferred_location" class="form-control" 
-                                   value="<?php echo sanitize($applicant['preferred_location']); ?>">
+                                   value="<?php echo htmlspecialchars($applicant['preferred_location'], ENT_QUOTES, 'UTF-8'); ?>">
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Current Salary</label>
@@ -362,7 +362,7 @@ include '../../templates/header.php';
                     <div class="mb-3">
                         <label class="form-label">Source Reference</label>
                         <input type="text" name="source_reference" class="form-control" 
-                               value="<?php echo $applicant['source_reference']; ?>" 
+                               value="<?php echo htmlspecialchars($applicant['source_reference'], ENT_QUOTES, 'UTF-8'); ?>" 
                                placeholder="e.g., Reference name, portal name">
                     </div>
                     

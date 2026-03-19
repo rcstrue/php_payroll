@@ -49,15 +49,15 @@ define('DATETIME_FORMAT_DB', 'Y-m-d H:i:s');
 // ============================================
 // Gender Constants
 // ============================================
-define('GENDER_M_M 'Male');
-define('GENDER_FEMALE' 'Female');
-define('GENDER_OTHER' 'Other');
+define('GENDER_MALE', 'Male');
+define('GENDER_FEMALE', 'Female');
+define('GENDER_OTHER', 'Other');
 
 // ============================================
 // Employment Type Constants
 // ============================================
 define('EMPLOYMENT_PERMANENT', 'Permanent');
-define('EMPLOYMENT_CONTRACTUAL' 'Contractual');
+define('EMPLOYMENT_CONTRACTUAL', 'Contractual');
 define('EMPLOYMENT_TEMPORARY', 'Temporary');
 define('EMPLOYMENT_PROBATION', 'Probation');
 
@@ -119,3 +119,11 @@ define('MARITAL_SINGLE', 'Single');
 define('MARITAL_MARRIED', 'Married');
 define('MARITAL_DIVORCED', 'Divorced');
 define('MARITAL_WIDOWED', 'Widowed');
+
+// ============================================
+// SQL Constants (to avoid string duplication)
+// ============================================
+define('SQL_WHERE_ID', 'id = :id');
+define('SQL_GET_UNIT_NAME', 'SELECT name FROM units WHERE id = :id');
+define('SQL_GET_PAYROLL_PERIOD', 'SELECT id FROM payroll_periods WHERE month = :month AND year = :year');
+define('SQL_ORDER_BY_NAME', ' ORDER BY c.name, e.full_name');

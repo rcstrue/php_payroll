@@ -43,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $employees = $db->fetchAll(
             "SELECT e.id, e.employee_code, e.uan_number, e.full_name, e.father_name, 
                     e.date_of_joining, e.date_of_leaving, e.is_pf_restricted, e.is_pension_member,
-                    COALESCE(c.name, c.client_name) as client_name,
+                    c.name as client_name,
                     p.basic, p.da, p.pf_employee, p.pf_employer, p.edli_employee, p.edli_employer,
                     p.present_days, p.paid_days
              FROM payroll p

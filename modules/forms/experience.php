@@ -147,7 +147,7 @@ if ($emp['date_of_joining']) {
                     <td>UAN: <?php echo sanitize($emp['uan_number'] ?? 'N/A'); ?></td>
                 </tr>
                 <tr>
-                    <td>Aadhaar: <?php echo maskAadhaar($emp['aadhaar_number']); ?></td>
+                    <td>Aadhaar: <?php echo sanitize($emp['aadhaar_number'] ?? 'N/A'); ?></td>
                     <td>Mobile: <?php echo sanitize($emp['mobile_number'] ?? 'N/A'); ?></td>
                 </tr>
             </table>

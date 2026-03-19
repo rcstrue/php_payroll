@@ -33,19 +33,19 @@ $company = $db->fetch("SELECT * FROM companies LIMIT 1");
 
 // Get clients for filter
 $clients = $db->query(
-    "SELECT DISTINCT COALESCE(c.name, c.client_name, e.client_name) as client_name 
+    "SELECT DISTINCT c.name as client_name 
      FROM employees e 
      LEFT JOIN clients c ON e.client_id = c.id 
-     WHERE e.client_name IS NOT NULL AND e.client_name != '' 
-     ORDER BY client_name"
+     WHERE c.name IS NOT NULL AND c.name != '' 
+     ORDER BY c.name"
 )->fetchAll(PDO::FETCH_ASSOC);
 
 // Build query for PF data
-$where = "pp.month = :month AND pp.year = :year AND e.is_pf_applicable = 1";
+$where = "pp.month = :month AND pp.year = :year AND ess.pf_applicable = 1";
 $params = [':month' => $month, ':year' => $year];
 
 if ($clientFilter) {
-    $where .= " AND COALESCE(c.name, c.client_name, e.client_name) = :client";
+    $where .= " AND c.name = :client";
     $params[':client'] = $clientFilter;
 }
 
@@ -69,10 +69,11 @@ $sql = "SELECT
             p.pf_employer as eps_contribution,
             0 as edli_wages,
             0 as edli_contribution,
-            COALESCE(c.name, c.client_name, e.client_name) as client_name
+            c.name as client_name
         FROM payroll p
         JOIN employees e ON p.employee_id = e.employee_code
         LEFT JOIN clients c ON e.client_id = c.id
+        LEFT JOIN employee_salary_structures ess ON e.id = ess.employee_id
         JOIN payroll_periods pp ON p.payroll_period_id = pp.id
         WHERE {$where}
         ORDER BY e.employee_code";

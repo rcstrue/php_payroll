@@ -149,10 +149,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_attendance'])) {
         }
         
         setFlash('success', "Attendance saved successfully! {$savedCount} employees updated.");
-        
+
         // Redirect to same page with filters
-        header("Location: index.php?page=attendance/add&client_id={$clientId}&unit_id={$unitId}&month={$month}&year={$year}&load=1");
-        exit;
+        // Note: Using redirect() helper instead of header() to handle "headers already sent" case
+        redirect("index.php?page=attendance/add&client_id={$clientId}&unit_id={$unitId}&month={$month}&year={$year}&load=1");
         
     } catch (Exception $e) {
         setFlash('error', 'Error saving attendance: ' . $e->getMessage());
@@ -216,9 +216,9 @@ $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $selectedMonth, $selectedYear);
                             $currentYear = date('Y');
                             for ($y = $currentYear; $y >= $currentYear - 2; $y--):
                             ?>
-                            <option value="<?php echo $y; ?>" <?php echo $selectedYear == $y ? 'selected' : ''; ?>>
-                                <?php echo $y; ?>
-                            </option>
+                                <option value="<?php echo $y; ?>" <?php echo $selectedYear == $y ? 'selected' : ''; ?>>
+                                    <?php echo $y; ?>
+                                </option>
                             <?php endfor; ?>
                         </select>
                     </div>
@@ -283,7 +283,7 @@ $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $selectedMonth, $selectedYear);
                                 $sr = 1;
                                 foreach ($employees as $emp): 
                                 ?>
-                                <tr>
+                                    <tr>
                                     <td class="text-center"><?php echo $sr++; ?></td>
                                     <td>
                                         <input type="hidden" name="employee_id[]" value="<?php echo $emp['id']; ?>">

@@ -22,7 +22,7 @@ $employeeId = $_SESSION['employee_portal']['employee_id'];
 // Get all payslips
 $payslips = $db->fetchAll(
     "SELECT p.*, pp.period_name, pp.month, pp.year, pp.status as period_status,
-            COALESCE(c.name, c.client_name) as client_name
+            c.name as client_name
      FROM payroll p
      JOIN payroll_periods pp ON p.payroll_period_id = pp.id
      LEFT JOIN clients c ON p.client_id = c.id

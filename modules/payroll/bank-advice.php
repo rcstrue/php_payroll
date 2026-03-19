@@ -18,7 +18,7 @@ $periods = $db->query(
 
 // Get clients for filter
 $clients = $db->query(
-    "SELECT DISTINCT COALESCE(c.name, c.client_name, e.client_name) as client_name FROM employees e LEFT JOIN clients c ON e.client_id = c.id WHERE e.client_name IS NOT NULL AND e.client_name != '' ORDER BY client_name"
+    "SELECT DISTINCT c.name as client_name FROM employees e LEFT JOIN clients c ON e.client_id = c.id WHERE c.name IS NOT NULL AND c.name != '' ORDER BY client_name"
 )->fetchAll(PDO::FETCH_ASSOC);
 
 // Build query for bank advice
@@ -26,12 +26,12 @@ $where = "pp.month = :month AND pp.year = :year";
 $params = ['month' => $month, 'year' => $year];
 
 if ($clientName) {
-    $where .= " AND COALESCE(c.name, c.client_name, e.client_name) = :client_name";
+    $where .= " AND c.name = :client_name";
     $params['client_name'] = $clientName;
 }
 
 if ($unitName) {
-    $where .= " AND COALESCE(u.name, u.unit_name, e.unit_name) = :unit_name";
+    $where .= " AND u.name = :unit_name";
     $params['unit_name'] = $unitName;
 }
 
@@ -43,8 +43,8 @@ $sql = "SELECT
             COALESCE(e.account_number, e.bank_account_number) as bank_account_number,
             COALESCE(e.ifsc_code, e.bank_ifsc_code) as bank_ifsc_code,
             p.net_salary,
-            COALESCE(c.name, c.client_name, e.client_name) as client_name,
-            COALESCE(u.name, u.unit_name, e.unit_name) as unit_name
+            c.name as client_name,
+            u.name as unit_name
         FROM payroll p
         JOIN employees e ON p.employee_id = e.employee_code
         LEFT JOIN clients c ON e.client_id = c.id
@@ -67,10 +67,11 @@ $totalEmployees = count($bankData);
 $units = [];
 if ($clientName) {
     $stmt = $db->prepare(
-        "SELECT DISTINCT COALESCE(u.name, u.unit_name, e.unit_name) as unit_name FROM employees e 
+        "SELECT DISTINCT u.name as unit_name FROM employees e 
          LEFT JOIN units u ON e.unit_id = u.id
-         WHERE COALESCE(e.client_name, (SELECT name FROM clients WHERE id = e.client_id)) = ? 
-         AND (e.unit_name IS NOT NULL OR u.name IS NOT NULL) 
+         LEFT JOIN clients c ON e.client_id = c.id
+         WHERE c.name = ? 
+         AND u.name IS NOT NULL 
          ORDER BY unit_name"
     );
     $stmt->execute([$clientName]);

@@ -27,7 +27,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $employees = [];
                 for ($i = 1; $i < count($rows); $i++) {
                     $row = $rows[$i];
-                    if (empty($row) || empty($row[0])) continue;
+                    if (empty($row) || empty($row[0])) {
+                        continue;
+                    }
                     
                     $emp = [];
                     foreach ($headers as $index => $header) {
@@ -113,7 +115,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 $employees = [];
                 while (($row = fgetcsv($handle)) !== false) {
-                    if (empty($row) || empty($row[0])) continue;
+                    if (empty($row) || empty($row[0])) {
+                        continue;
+                    }
                     
                     $emp = [];
                     foreach ($headers as $index => $header) {

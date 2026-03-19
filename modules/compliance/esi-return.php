@@ -47,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $employees = $db->fetchAll(
             "SELECT e.id, e.employee_code, e.full_name, e.esi_number, e.gender,
                     e.date_of_joining, e.date_of_leaving,
-                    COALESCE(c.name, c.client_name) as client_name,
+                    c.name as client_name,
                     p.gross_salary, p.net_salary, p.esi_employee, p.esi_employer,
                     p.present_days, p.paid_days, p.total_working_days
              FROM payroll p
@@ -93,8 +93,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $totalEE += $eeContribution;
                 $totalER += $erContribution;
                 
-                if ($emp['gender'] == 'male') $maleCount++;
-                else $femaleCount++;
+                if ($emp['gender'] == 'male') {
+                    $maleCount++;
+                } else {
+                    $femaleCount++;
+                }
             }
         }
         

@@ -31,8 +31,10 @@ $params = [];
 if ($clientFilter) { $where .= " AND e.client_id = ?"; $params['client_id'] = $clientFilter; }
 if ($search) { $where .= " AND (e.employee_code LIKE ? OR e.full_name LIKE ?)"; $params['search'] = '%' . $search . '%'; }
 
-$employees = $db->prepare("SELECT e.id, e.employee_code, e.full_name, COALESCE(c.name, e.client_name) as client_name,
+$employees = $db->prepare("SELECT e.id, e.employee_code, e.full_name, c.name as client_name,
+    u.name as unit_name
     FROM employees e LEFT JOIN clients c ON e.client_id = c.id
+    LEFT JOIN units u ON e.unit_id = u.id
     $where ORDER BY e.employee_code")->execute($params);
 $employees = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -43,7 +45,7 @@ $leaveTypes = ['CL'=>'Casual Leave','PL'=>'Privilege Leave','SL'=>'Sick Leave','
 <div class="row">
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h4 class="mb-0"><i class="bi bi-calendar-x me-2"></i>Leave Balance - <?php echo sanitize($yearFilter); ?></h4>
+            <h4 class="mb-0"><i class="bi bi-calendar-x me-2"></i>Leave Balance - <?php echo htmlspecialchars($yearFilter, ENT_QUOTES, 'UTF-8'); ?></h4>
             <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addBalanceModal"><i class="bi bi-plus-lg me-1"></i>Add Balance</button>
         </div>
         
@@ -66,7 +68,7 @@ $leaveTypes = ['CL'=>'Casual Leave','PL'=>'Privilege Leave','SL'=>'Sick Leave','
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Search</label>
-                        <input type="text" name="search" class="form-control" value="<?php echo sanitize($search); ?>">
+                        <input type="text" name="search" class="form-control" value="<?php echo htmlspecialchars($search, ENT_QUOTES, 'UTF-8'); ?>">
                     </div>
                     <div class="col-md-2 d-flex align-items-end">
                         <button type="submit" class="btn btn-primary">Filter</button>
@@ -132,7 +134,7 @@ $leaveTypes = ['CL'=>'Casual Leave','PL'=>'Privilege Leave','SL'=>'Sick Leave','
                     </div>
                     <div class="col-md-6">
                         <label class="form-label">Year</label>
-                        <input type="number" name="year" class="form-control" value="<?php echo $yearFilter; ?>" readonly>
+                        <input type="number" name="year" class="form-control" value="<?php echo htmlspecialchars($yearFilter, ENT_QUOTES, 'UTF-8'); ?>" readonly>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Opening</label>

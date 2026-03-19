@@ -27,6 +27,9 @@ if (!in_array($_SESSION['role_code'], ['admin', 'hr_executive', 'manager'])) {
     redirect('index.php?page=dashboard');
 }
 
+// Page URL constant
+define('ARREARS_PAGE_URL', 'index.php?page=payroll/arrears');
+
 // Handle arrear calculation
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     
@@ -51,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         
         if (!$employee) {
             setFlash('error', 'Employee not found');
-            redirect('index.php?page=payroll/arrears');
+            redirect(ARREARS_PAGE_URL);
         }
         
         // Calculate months between from and to
@@ -137,13 +140,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             'reason' => $reason,
             'status' => 'pending',
             'created_by' => $_SESSION['user_id'],
-            'created_at' => date('Y-m-d H:i:s')
+            'created_at' => date(DATETIME_FORMAT_DB)
         ];
         
         try {
             $arrearId = $db->insert('employee_arrears', $arrearData);
             setFlash('success', "Arrear calculated successfully. Net Arrear: ₹" . number_format($netArrear, 2));
-            redirect('index.php?page=payroll/arrears');
+            redirect(ARREARS_PAGE_URL);
         } catch (Exception $e) {
             setFlash('error', 'Error saving arrear: ' . $e->getMessage());
         }
@@ -162,7 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         
         if (!$arrear) {
             setFlash('error', 'Arrear not found');
-            redirect('index.php?page=payroll/arrears');
+            redirect(ARREARS_PAGE_URL);
         }
         
         // Get or create payroll period
@@ -184,7 +187,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 'end_date' => $endDate,
                 'status' => 'draft',
                 'created_by' => $_SESSION['user_id'],
-                'created_at' => date('Y-m-d H:i:s')
+                'created_at' => date(DATETIME_FORMAT_DB)
             ]);
         } else {
             $periodId = $period['id'];
@@ -203,7 +206,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 'pf_employee' => $existingPayroll['pf_employee'] + $arrear['pf_arrear'],
                 'esi_employee' => $existingPayroll['esi_employee'] + $arrear['esi_arrear'],
                 'net_salary' => $existingPayroll['net_salary'] + $arrear['net_arrear'],
-                'updated_at' => date('Y-m-d H:i:s')
+                'updated_at' => date(DATETIME_FORMAT_DB)
             ], 'id = :id', ['id' => $existingPayroll['id']]);
         } else {
             // Create new payroll record with arrear
@@ -215,7 +218,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 'esi_employee' => $arrear['esi_arrear'],
                 'net_salary' => $arrear['net_arrear'],
                 'payment_status' => 'pending',
-                'created_at' => date('Y-m-d H:i:s')
+                'created_at' => date(DATETIME_FORMAT_DB)
             ]);
         }
         
@@ -223,19 +226,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $db->update('employee_arrears', [
             'status' => 'approved',
             'approved_by' => $_SESSION['user_id'],
-            'approved_at' => date('Y-m-d H:i:s'),
+            'approved_at' => date(DATETIME_FORMAT_DB),
             'payment_period_id' => $periodId
         ], 'id = :id', ['id' => $arrearId]);
         
         setFlash('success', 'Arrear approved and added to payroll');
-        redirect('index.php?page=payroll/arrears');
+        redirect(ARREARS_PAGE_URL);
     }
 }
 
 // Get existing arrears
 $arrears = $db->fetchAll(
     "SELECT a.*, e.employee_code, e.full_name, 
-            COALESCE(c.name, c.client_name) as client_name
+            c.name as client_name
      FROM employee_arrears a
      JOIN employees e ON a.employee_id = e.id
      LEFT JOIN clients c ON e.client_id = c.id
@@ -245,7 +248,7 @@ $arrears = $db->fetchAll(
 // Get employees for dropdown
 $employees = $db->fetchAll(
     "SELECT e.id, e.employee_code, e.full_name, e.designation,
-            COALESCE(c.name, c.client_name) as client_name
+            c.name as client_name
      FROM employees e
      LEFT JOIN clients c ON e.client_id = c.id
      WHERE e.status = 'active'

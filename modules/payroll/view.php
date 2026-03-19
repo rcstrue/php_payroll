@@ -1,9 +1,169 @@
 <?php
 /**
  * RCS HRMS Pro - View Payroll
+ * Version: 2.2.0 - Enhanced with detail drill-down
+ * 
+ * IMPORTANT NOTES:
+ * - AADHAAR NUMBER SHOULD NEVER BE HIDDEN IN INTERNAL VIEWS
+ * - Use client_id and unit_id for filtering
+ * - clients table uses 'name' column
  */
 
 $pageTitle = 'Payroll';
+
+// Handle AJAX detail request
+if (isset($_GET['action']) && $_GET['action'] === 'detail') {
+    header('Content-Type: text/html');
+    $periodId = (int)($_GET['period_id'] ?? 0);
+    $employeeCode = sanitize($_GET['employee_id'] ?? '');
+    
+    if ($periodId && $employeeCode) {
+        $detail = $payroll->getPayrollDetail($periodId, $employeeCode);
+        if ($detail):
+?>
+<div class="row">
+    <div class="col-md-6">
+        <h6 class="text-muted mb-2">Employee Information</h6>
+        <table class="table table-sm table-borderless">
+            <tr><td class="text-muted" style="width: 120px;">Employee:</td>
+                <td><strong><?php echo sanitize($detail['full_name']); ?></strong></td></tr>
+            <tr><td class="text-muted">Code:</td>
+                <td><code><?php echo sanitize($detail['employee_code']); ?></code></td></tr>
+            <tr><td class="text-muted">Designation:</td>
+                <td><?php echo sanitize($detail['designation'] ?? '-'); ?></td></tr>
+            <tr><td class="text-muted">Client:</td>
+                <td><?php echo sanitize($detail['client_name'] ?? '-'); ?></td></tr>
+            <tr><td class="text-muted">Unit:</td>
+                <td><?php echo sanitize($detail['unit_name'] ?? '-'); ?></td></tr>
+            <tr><td class="text-muted">DOJ:</td>
+                <td><?php echo formatDate($detail['date_of_joining']); ?></td></tr>
+        </table>
+    </div>
+    <div class="col-md-6">
+        <h6 class="text-muted mb-2">Attendance Summary</h6>
+        <table class="table table-sm table-borderless">
+            <tr><td class="text-muted" style="width: 120px;">Total Days:</td>
+                <td><?php echo $detail['total_days'] ?? 30; ?></td></tr>
+            <tr><td class="text-muted">Paid Days:</td>
+                <td><strong class="text-success"><?php echo $detail['paid_days'] ?? 0; ?></strong></td></tr>
+            <tr><td class="text-muted">Unpaid Days:</td>
+                <td class="text-danger"><?php echo $detail['unpaid_days'] ?? 0; ?></td></tr>
+            <?php if (($detail['overtime_hours'] ?? 0) > 0): ?>
+            <tr><td class="text-muted">Overtime:</td>
+                <td><?php echo $detail['overtime_hours']; ?> hrs</td></tr>
+            <?php endif; ?>
+        </table>
+        
+        <h6 class="text-muted mb-2 mt-3">Bank Details</h6>
+        <table class="table table-sm table-borderless">
+            <tr><td class="text-muted" style="width: 120px;">Bank:</td>
+                <td><?php echo sanitize($detail['bank_name'] ?? '-'); ?></td></tr>
+            <tr><td class="text-muted">A/C No:</td>
+                <td><?php echo sanitize($detail['account_number'] ?? '-'); ?></td></tr>
+            <tr><td class="text-muted">IFSC:</td>
+                <td><?php echo sanitize($detail['ifsc_code'] ?? '-'); ?></td></tr>
+        </table>
+    </div>
+</div>
+
+<hr>
+
+<div class="row">
+    <div class="col-md-6">
+        <h6 class="text-muted mb-2">Earnings</h6>
+        <table class="table table-sm">
+            <tr><td>Basic</td><td class="text-end"><?php echo formatCurrency($detail['basic'] ?? 0); ?></td></tr>
+            <tr><td>DA</td><td class="text-end"><?php echo formatCurrency($detail['da'] ?? 0); ?></td></tr>
+            <tr><td>HRA</td><td class="text-end"><?php echo formatCurrency($detail['hra'] ?? 0); ?></td></tr>
+            <tr><td>Conveyance</td><td class="text-end"><?php echo formatCurrency($detail['conveyance'] ?? 0); ?></td></tr>
+            <tr><td>Medical</td><td class="text-end"><?php echo formatCurrency($detail['medical_allowance'] ?? 0); ?></td></tr>
+            <tr><td>Special Allowance</td><td class="text-end"><?php echo formatCurrency($detail['special_allowance'] ?? 0); ?></td></tr>
+            <tr><td>Other Allowance</td><td class="text-end"><?php echo formatCurrency($detail['other_allowance'] ?? 0); ?></td></tr>
+            <?php if (($detail['overtime_amount'] ?? 0) > 0): ?>
+            <tr><td>Overtime</td><td class="text-end"><?php echo formatCurrency($detail['overtime_amount']); ?></td></tr>
+            <?php endif; ?>
+            <tr class="table-success">
+                <td><strong>Gross Earnings</strong></td>
+                <td class="text-end"><strong><?php echo formatCurrency($detail['gross_earnings'] ?? 0); ?></strong></td>
+            </tr>
+        </table>
+    </div>
+    <div class="col-md-6">
+        <h6 class="text-muted mb-2">Deductions</h6>
+        <table class="table table-sm">
+            <tr><td>PF (Employee)</td><td class="text-end"><?php echo formatCurrency($detail['pf_employee'] ?? 0); ?></td></tr>
+            <tr><td>ESI (Employee)</td><td class="text-end"><?php echo formatCurrency($detail['esi_employee'] ?? 0); ?></td></tr>
+            <tr><td>Professional Tax</td><td class="text-end"><?php echo formatCurrency($detail['professional_tax'] ?? 0); ?></td></tr>
+            <tr><td>LWF (Employee)</td><td class="text-end"><?php echo formatCurrency($detail['lwf_employee'] ?? 0); ?></td></tr>
+            <tr><td>Salary Advance</td><td class="text-end"><?php echo formatCurrency($detail['salary_advance'] ?? 0); ?></td></tr>
+            <tr><td>Other Deductions</td><td class="text-end"><?php echo formatCurrency($detail['other_deduction'] ?? 0); ?></td></tr>
+            <tr class="table-danger">
+                <td><strong>Total Deductions</strong></td>
+                <td class="text-end"><strong><?php echo formatCurrency($detail['total_deductions'] ?? 0); ?></strong></td>
+            </tr>
+        </table>
+    </div>
+</div>
+
+<hr>
+
+<div class="row">
+    <div class="col-md-6">
+        <h6 class="text-muted mb-2">Employer Contributions</h6>
+        <table class="table table-sm">
+            <tr><td>PF (Employer)</td><td class="text-end"><?php echo formatCurrency($detail['pf_employer'] ?? 0); ?></td></tr>
+            <tr><td>EPS (Employer)</td><td class="text-end"><?php echo formatCurrency($detail['eps_employer'] ?? 0); ?></td></tr>
+            <tr><td>EDLIS</td><td class="text-end"><?php echo formatCurrency($detail['edlis_employer'] ?? 0); ?></td></tr>
+            <tr><td>EPF Admin</td><td class="text-end"><?php echo formatCurrency($detail['epf_admin_charges'] ?? 0); ?></td></tr>
+            <tr><td>ESI (Employer)</td><td class="text-end"><?php echo formatCurrency($detail['esi_employer'] ?? 0); ?></td></tr>
+            <tr><td>Bonus Provision</td><td class="text-end"><?php echo formatCurrency($detail['bonus_provision'] ?? 0); ?></td></tr>
+            <tr><td>Gratuity Provision</td><td class="text-end"><?php echo formatCurrency($detail['gratuity_provision'] ?? 0); ?></td></tr>
+            <tr class="table-info">
+                <td><strong>Total Employer Contribution</strong></td>
+                <td class="text-end"><strong><?php echo formatCurrency($detail['total_employer_contribution'] ?? 0); ?></strong></td>
+            </tr>
+        </table>
+    </div>
+    <div class="col-md-6">
+        <div class="card bg-success bg-opacity-10">
+            <div class="card-body text-center py-4">
+                <div class="text-muted">NET PAY</div>
+                <h2 class="text-success mb-0"><?php echo formatCurrency($detail['net_pay'] ?? 0); ?></h2>
+                <div class="mt-2">
+                    <small class="text-muted">CTC: <?php echo formatCurrency($detail['ctc'] ?? 0); ?></small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-3">
+            <div class="d-flex justify-content-between">
+                <span>Status:</span>
+                <span class="badge bg-<?php 
+                    echo $detail['status'] === 'Paid' ? 'success' : 
+                        ($detail['status'] === 'Approved' ? 'primary' : 
+                        ($detail['salary_hold'] ? 'warning' : 'secondary')); 
+                ?>"><?php 
+                    echo $detail['salary_hold'] ? 'Hold' : sanitize($detail['status']); 
+                ?></span>
+            </div>
+            <?php if ($detail['salary_hold'] && $detail['hold_reason']): ?>
+            <div class="text-warning small mt-1">
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                <?php echo sanitize($detail['hold_reason']); ?>
+            </div>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+<?php
+        else:
+            echo '<div class="alert alert-warning">Payroll details not found.</div>';
+        endif;
+    } else {
+        echo '<div class="alert alert-danger">Invalid request.</div>';
+    }
+    exit;
+}
 
 // Get filter parameters
 $month = isset($_GET['month']) ? (int)$_GET['month'] : (int)date('n');
@@ -13,19 +173,19 @@ $unitFilter = isset($_GET['unit']) ? sanitize($_GET['unit']) : '';
 $statusFilter = isset($_GET['status']) ? sanitize($_GET['status']) : '';
 
 // Get clients for filter
-$clients = $db->query("SELECT DISTINCT COALESCE(c.name, c.client_name, e.client_name) as client_name FROM employees e LEFT JOIN clients c ON e.client_id = c.id WHERE e.client_name IS NOT NULL AND e.client_name != '' ORDER BY client_name")->fetchAll(PDO::FETCH_ASSOC);
+$clients = $db->query("SELECT DISTINCT c.name as client_name FROM employees e LEFT JOIN clients c ON e.client_id = c.id WHERE c.name IS NOT NULL AND c.name != '' ORDER BY client_name")->fetchAll(PDO::FETCH_ASSOC);
 
 // Build query
 $where = "pp.month = :month AND pp.year = :year";
 $params = [':month' => $month, ':year' => $year];
 
 if ($clientFilter) {
-    $where .= " AND COALESCE(c.name, c.client_name, e.client_name) = :client";
+    $where .= " AND c.name = :client";
     $params[':client'] = $clientFilter;
 }
 
 if ($unitFilter) {
-    $where .= " AND COALESCE(u.name, u.unit_name, e.unit_name) = :unit";
+    $where .= " AND u.name = :unit";
     $params[':unit'] = $unitFilter;
 }
 
@@ -36,8 +196,8 @@ if ($statusFilter) {
 
 // Get payroll records
 $sql = "SELECT p.*, e.full_name, e.employee_code, e.designation,
-        COALESCE(c.name, c.client_name, e.client_name) as client_name,
-        COALESCE(u.name, u.unit_name, e.unit_name) as unit_name,
+        c.name as client_name,
+        u.name as unit_name,
         pp.period_name
         FROM payroll p
         JOIN employees e ON p.employee_id = e.employee_code
@@ -74,7 +234,7 @@ foreach ($payrollData as $row) {
 // Get units for filter
 $units = [];
 if ($clientFilter) {
-    $stmt = $db->prepare("SELECT DISTINCT COALESCE(u.name, u.unit_name, e.unit_name) as unit_name FROM employees e LEFT JOIN units u ON e.unit_id = u.id WHERE COALESCE(e.client_name, (SELECT name FROM clients WHERE id = e.client_id)) = ? AND (e.unit_name IS NOT NULL OR u.name IS NOT NULL) ORDER BY unit_name");
+    $stmt = $db->prepare("SELECT DISTINCT u.name as unit_name FROM employees e LEFT JOIN units u ON e.unit_id = u.id LEFT JOIN clients c ON e.client_id = c.id WHERE c.name = ? AND u.name IS NOT NULL ORDER BY unit_name");
     $stmt->execute([$clientFilter]);
     $units = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }

@@ -43,11 +43,11 @@ if ($reportType === 'pf') {
     $params = ['month' => $month, 'year' => $year];
     
     if ($clientId) {
-        $sql .= " AND e.client_id = :client_id";
+        $sql .= SQL_FILTER_CLIENT;
         $params['client_id'] = $clientId;
     }
     
-    $sql .= " ORDER BY c.name, e.full_name";
+    $sql .= SQL_ORDER_BY_NAME;
     
     $stmt = $db->prepare($sql);
     $stmt->execute($params);
@@ -79,11 +79,11 @@ if ($reportType === 'pf') {
     $params = ['month' => $month, 'year' => $year];
     
     if ($clientId) {
-        $sql .= " AND e.client_id = :client_id";
+        $sql .= SQL_FILTER_CLIENT;
         $params['client_id'] = $clientId;
     }
     
-    $sql .= " ORDER BY c.name, e.full_name";
+    $sql .= SQL_ORDER_BY_NAME;
     
     $stmt = $db->prepare($sql);
     $stmt->execute($params);
@@ -109,11 +109,11 @@ if ($reportType === 'pf') {
     $params = ['month' => $month, 'year' => $year];
     
     if ($clientId) {
-        $sql .= " AND e.client_id = :client_id";
+        $sql .= SQL_FILTER_CLIENT;
         $params['client_id'] = $clientId;
     }
     
-    $sql .= " ORDER BY c.name, e.full_name";
+    $sql .= SQL_ORDER_BY_NAME;
     
     $stmt = $db->prepare($sql);
     $stmt->execute($params);
@@ -139,11 +139,11 @@ if ($reportType === 'pf') {
     $params = [];
     
     if ($clientId) {
-        $sql .= " AND e.client_id = :client_id";
+        $sql .= SQL_FILTER_CLIENT;
         $params['client_id'] = $clientId;
     }
     
-    $sql .= " ORDER BY c.name, e.full_name";
+    $sql .= SQL_ORDER_BY_NAME;
     
     $stmt = $db->prepare($sql);
     $stmt->execute($params);

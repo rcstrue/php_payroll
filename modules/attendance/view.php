@@ -32,12 +32,12 @@ $where = ["MONTH(a.attendance_date) = :month", "YEAR(a.attendance_date) = :year"
 $params = [':month' => $monthFilter, ':year' => $yearFilter];
 
 if (!empty($clientFilter)) {
-    $where[] = "COALESCE(c.name, c.client_name, e.client_name) = :client";
+    $where[] = "c.name = :client";
     $params[':client'] = $clientFilter;
 }
 
 if (!empty($unitFilter)) {
-    $where[] = "COALESCE(u.name, u.unit_name, e.unit_name) = :unit";
+    $where[] = "u.name = :unit";
     $params[':unit'] = $unitFilter;
 }
 
@@ -66,8 +66,8 @@ $total = $countStmt->fetch(PDO::FETCH_ASSOC)['total'];
 // Get attendance data
 $sql = "SELECT a.*, 
                e.full_name, e.employee_code, e.designation,
-               COALESCE(c.name, c.client_name, e.client_name) as client_name,
-               COALESCE(u.name, u.unit_name, e.unit_name) as unit_name
+               c.name as client_name,
+               u.name as unit_name
         FROM attendance a 
         LEFT JOIN employees e ON a.employee_id = e.employee_code 
         LEFT JOIN clients c ON e.client_id = c.id
@@ -319,9 +319,9 @@ $statuses = ['Present', 'Absent', 'Weekly Off', 'Holiday', 'Paid Leave', 'Unpaid
                                 
                                 for ($i = $startPage; $i <= $endPage; $i++): 
                                 ?>
-                                <li class="page-item <?php echo $i == $page ? 'active' : ''; ?>">
-                                    <a class="page-link" href="?page=attendance/view&month=<?php echo $monthFilter; ?>&year=<?php echo $yearFilter; ?>&client=<?php echo urlencode($clientFilter); ?>&unit=<?php echo urlencode($unitFilter); ?>&status=<?php echo urlencode($statusFilter); ?>&pg=<?php echo $i; ?>"><?php echo $i; ?></a>
-                                </li>
+                                    <li class="page-item <?php echo $i == $page ? 'active' : ''; ?>">
+                                        <a class="page-link" href="?page=attendance/view&month=<?php echo $monthFilter; ?>&year=<?php echo $yearFilter; ?>&client=<?php echo urlencode($clientFilter); ?>&unit=<?php echo urlencode($unitFilter); ?>&status=<?php echo urlencode($statusFilter); ?>&pg=<?php echo $i; ?>"><?php echo $i; ?></a>
+                                    </li>
                                 <?php endfor; ?>
                                 
                                 <?php if ($page < $totalPages): ?>

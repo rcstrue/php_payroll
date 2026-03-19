@@ -2,17 +2,58 @@
 /**
  * RCS HRMS Pro - Employee List Page
  * Updated for new database schema
+ *
+ * NOTE: Column visibility dropdown added - users can toggle columns on/off
+ * Preferences are saved in localStorage for persistence
  */
 
 $pageTitle = 'Employees';
 
+// Define available columns for the visibility dropdown
+// NOTE: Add new columns here when adding new fields to the employee table
+// 'default' => true means column is visible by default
+$availableColumns = [
+    'employee_code' => ['label' => 'Employee Code', 'default' => true],
+    'full_name' => ['label' => 'Name', 'default' => true],
+    'father_name' => ['label' => 'Father Name', 'default' => false],
+    'designation' => ['label' => 'Designation', 'default' => true],
+    'department' => ['label' => 'Department', 'default' => false],
+    'client_unit' => ['label' => 'Client / Unit', 'default' => true],
+    'worker_category' => ['label' => 'Category', 'default' => true],
+    'employment_type' => ['label' => 'Employment Type', 'default' => false],
+    'date_of_joining' => ['label' => 'DOJ', 'default' => true],
+    'date_of_leaving' => ['label' => 'DOL', 'default' => false],
+    'pf_esi' => ['label' => 'PF/ESI', 'default' => true],
+    'uan_number' => ['label' => 'UAN', 'default' => false],
+    'esic_number' => ['label' => 'ESIC No', 'default' => false],
+    'mobile_number' => ['label' => 'Mobile', 'default' => true],
+    'alternate_mobile' => ['label' => 'Alt Mobile', 'default' => false],
+    'email' => ['label' => 'Email', 'default' => false],
+    'aadhaar_number' => ['label' => 'Aadhaar', 'default' => false],
+    'gender' => ['label' => 'Gender', 'default' => false],
+    'date_of_birth' => ['label' => 'DOB', 'default' => false],
+    'address' => ['label' => 'Address', 'default' => false],
+    'state' => ['label' => 'State', 'default' => false],
+    'district' => ['label' => 'District', 'default' => false],
+    'pin_code' => ['label' => 'Pin Code', 'default' => false],
+    'bank_name' => ['label' => 'Bank Name', 'default' => false],
+    'account_number' => ['label' => 'Account No', 'default' => false],
+    'ifsc_code' => ['label' => 'IFSC', 'default' => false],
+    'nominee_name' => ['label' => 'Nominee', 'default' => false],
+    'nominee_relation' => ['label' => 'Nominee Relation', 'default' => false],
+    'emergency_contact' => ['label' => 'Emergency Contact', 'default' => false],
+    'status' => ['label' => 'Status', 'default' => true],
+    'actions' => ['label' => 'Actions', 'default' => true]
+];
+
 // Get filters - default to 'approved' (active) employees
+// Sanitize all user inputs to prevent XSS
 $filters = [
-    'status' => $_GET['status'] ?? 'approved', // Default to approved/active
-    'client_id' => !empty($_GET['client_id']) ? $_GET['client_id'] : null,
-    'unit_id' => !empty($_GET['unit_id']) ? $_GET['unit_id'] : null,
-    'worker_category' => $_GET['worker_category'] ?? '',
-    'search' => $_GET['search'] ?? ''
+    'status' => sanitize($_GET['status'] ?? 'approved'), // Default to approved/active
+    'client_id' => !empty($_GET['client_id']) ? (int)$_GET['client_id'] : null,
+    'unit_id' => !empty($_GET['unit_id']) ? (int)$_GET['unit_id'] : null,
+    'worker_category' => sanitize($_GET['worker_category'] ?? ''),
+    'search' => sanitize($_GET['search'] ?? '')
 ];
 
 // Handle export - check if we can set headers (export should be handled before header.php)
@@ -164,6 +205,30 @@ try {
                     <a href="index.php?page=employee/import" class="btn btn-outline-primary btn-sm">
                         <i class="bi bi-upload me-1"></i>Import
                     </a>
+                    <!-- Column Visibility Dropdown -->
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-layout-three-columns me-1"></i>Columns
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end p-2" style="min-width: 220px; max-height: 400px; overflow-y: auto;">
+                            <li><small class="text-muted d-block mb-2">Toggle column visibility:</small></li>
+                            <?php foreach ($availableColumns as $colKey => $colInfo): ?>
+                            <li>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input column-toggle" id="col_<?php echo $colKey; ?>" 
+                                           data-column="<?php echo $colKey; ?>" <?php echo $colInfo['default'] ? 'checked' : ''; ?>>
+                                    <label class="form-check-label small" for="col_<?php echo $colKey; ?>"><?php echo $colInfo['label']; ?></label>
+                                </div>
+                            </li>
+                            <?php endforeach; ?>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <button type="button" class="btn btn-sm btn-outline-primary w-100" onclick="resetColumnVisibility()">
+                                    <i class="bi bi-arrow-counterclockwise me-1"></i>Reset to Default
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
             </div>
             
@@ -175,7 +240,7 @@ try {
                     <div class="col-md-2">
                         <input type="text" class="form-control" name="search" 
                                placeholder="Search by name, code, mobile..." 
-                               value="<?php echo sanitize($filters['search'] ?? ''); ?>">
+                               value="<?php echo htmlspecialchars($filters['search'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                     </div>
                     
                     <div class="col-md-2">
@@ -232,36 +297,40 @@ try {
             <!-- Employee Table -->
             <div class="card-body p-0">
                 <div class="table-responsive">
-                    <table class="table table-hover mb-0" id="employees-table">
-                        <thead>
+                    <table class="table table-hover table-sm mb-0" id="employees-table">
+                        <thead class="table-light">
                             <tr>
-                                <th>Emp Code</th>
-                                <th>Name</th>
-                                <th>Designation</th>
-                                <th>Client / Unit</th>
-                                <th>Category</th>
-                                <th>DOJ</th>
-                                <th>PF/ESI</th>
-                                <th>Status</th>
-                                <th>Actions</th>
+                                <?php foreach ($availableColumns as $colKey => $colInfo): ?>
+                                <?php if ($colKey === 'pf_esi'): ?>
+                                <th data-column="pf_esi" class="text-center" <?php echo $colInfo['default'] ? '' : 'style="display:none;"'; ?>>PF/ESI</th>
+                                <?php elseif ($colKey === 'status'): ?>
+                                <th data-column="status" class="text-center" <?php echo $colInfo['default'] ? '' : 'style="display:none;"'; ?>>Status</th>
+                                <?php elseif ($colKey === 'actions'): ?>
+                                <th data-column="actions" class="text-center" <?php echo $colInfo['default'] ? '' : 'style="display:none;"'; ?>>Actions</th>
+                                <?php else: ?>
+                                <th data-column="<?php echo $colKey; ?>" <?php echo $colInfo['default'] ? '' : 'style="display:none;"'; ?>><?php echo $colInfo['label']; ?></th>
+                                <?php endif; ?>
+                                <?php endforeach; ?>
                             </tr>
                         </thead>
                         <tbody>
                             <?php if (empty($employees)): ?>
                             <tr>
-                                <td colspan="9" class="text-center py-4 text-muted">
+                                <td colspan="<?php echo count($availableColumns); ?>" class="text-center py-4 text-muted">
                                     No employees found. <a href="index.php?page=employee/add">Add first employee</a>
                                 </td>
                             </tr>
                             <?php else: ?>
                             <?php foreach ($employees as $emp): ?>
                             <tr>
-                                <td>
-                                    <a href="index.php?page=employee/view&id=<?php echo $emp['id']; ?>">
-                                        <code><?php echo sanitize($emp['employee_code']); ?></code>
+                                <!-- Employee Code - Bold and Larger -->
+                                <td data-column="employee_code" <?php echo $availableColumns['employee_code']['default'] ? '' : 'style="display:none;"'; ?>>
+                                    <a href="index.php?page=employee/view&id=<?php echo $emp['id']; ?>" class="text-decoration-none">
+                                        <span class="fw-bold fs-5 text-primary"><?php echo sanitize($emp['employee_code']); ?></span>
                                     </a>
                                 </td>
-                                <td>
+                                <!-- Full Name -->
+                                <td data-column="full_name" <?php echo $availableColumns['full_name']['default'] ? '' : 'style="display:none;"'; ?>>
                                     <div class="d-flex align-items-center">
                                         <div class="avatar-sm me-2 bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width:32px;height:32px;font-size:12px;">
                                             <?php echo substr($emp['full_name'] ?? 'U', 0, 1); ?>
@@ -272,19 +341,124 @@ try {
                                         </div>
                                     </div>
                                 </td>
-                                <td><?php echo sanitize($emp['designation'] ?? '-'); ?></td>
-                                <td>
+                                <!-- Father Name -->
+                                <td data-column="father_name" <?php echo $availableColumns['father_name']['default'] ? '' : 'style="display:none;"'; ?>>
+                                    <?php echo sanitize($emp['father_name'] ?? '-'); ?>
+                                </td>
+                                <!-- Designation -->
+                                <td data-column="designation" <?php echo $availableColumns['designation']['default'] ? '' : 'style="display:none;"'; ?>>
+                                    <?php echo sanitize($emp['designation'] ?? '-'); ?>
+                                </td>
+                                <!-- Department -->
+                                <td data-column="department" <?php echo $availableColumns['department']['default'] ? '' : 'style="display:none;"'; ?>>
+                                    <?php echo sanitize($emp['department'] ?? '-'); ?>
+                                </td>
+                                <!-- Client / Unit -->
+                                <td data-column="client_unit" <?php echo $availableColumns['client_unit']['default'] ? '' : 'style="display:none;"'; ?>>
                                     <div><small class="text-muted">Client:</small> <?php echo sanitize($emp['client_name_display'] ?? $emp['client_name'] ?? '-'); ?></div>
                                     <div><small class="text-muted">Unit:</small> <?php echo sanitize($emp['unit_name_display'] ?? $emp['unit_name'] ?? '-'); ?></div>
                                 </td>
-                                <td><span class="badge bg-info-soft"><?php echo sanitize($emp['worker_category'] ?? '-'); ?></span></td>
-                                <td><?php echo formatDate($emp['date_of_joining']); ?></td>
-                                <td>
+                                <!-- Worker Category -->
+                                <td data-column="worker_category" <?php echo $availableColumns['worker_category']['default'] ? '' : 'style="display:none;"'; ?>>
+                                    <span class="badge bg-info-soft"><?php echo sanitize($emp['worker_category'] ?? '-'); ?></span>
+                                </td>
+                                <!-- Employment Type -->
+                                <td data-column="employment_type" <?php echo $availableColumns['employment_type']['default'] ? '' : 'style="display:none;"'; ?>>
+                                    <span class="badge bg-secondary-soft"><?php echo sanitize($emp['employment_type'] ?? '-'); ?></span>
+                                </td>
+                                <!-- Date of Joining -->
+                                <td data-column="date_of_joining" <?php echo $availableColumns['date_of_joining']['default'] ? '' : 'style="display:none;"'; ?>>
+                                    <?php echo formatDate($emp['date_of_joining']); ?>
+                                </td>
+                                <!-- Date of Leaving -->
+                                <td data-column="date_of_leaving" <?php echo $availableColumns['date_of_leaving']['default'] ? '' : 'style="display:none;"'; ?>>
+                                    <?php echo formatDate($emp['date_of_leaving']); ?>
+                                </td>
+                                <!-- PF/ESI -->
+                                <td data-column="pf_esi" class="text-center" <?php echo $availableColumns['pf_esi']['default'] ? '' : 'style="display:none;"'; ?>>
                                     <?php if (!empty($emp['pf_applicable'])): ?><span class="badge bg-primary-soft">PF</span><?php endif; ?>
                                     <?php if (!empty($emp['esi_applicable'])): ?><span class="badge bg-success-soft">ESI</span><?php endif; ?>
                                     <?php if (empty($emp['pf_applicable']) && empty($emp['esi_applicable'])): ?><span class="text-muted">-</span><?php endif; ?>
                                 </td>
-                                <td>
+                                <!-- UAN Number -->
+                                <td data-column="uan_number" <?php echo $availableColumns['uan_number']['default'] ? '' : 'style="display:none;"'; ?>>
+                                    <code><?php echo sanitize($emp['uan_number'] ?? '-'); ?></code>
+                                </td>
+                                <!-- ESIC Number -->
+                                <td data-column="esic_number" <?php echo $availableColumns['esic_number']['default'] ? '' : 'style="display:none;"'; ?>>
+                                    <code><?php echo sanitize($emp['esic_number'] ?? '-'); ?></code>
+                                </td>
+                                <!-- Mobile Number -->
+                                <td data-column="mobile_number" <?php echo $availableColumns['mobile_number']['default'] ? '' : 'style="display:none;"'; ?>>
+                                    <a href="tel:<?php echo sanitize($emp['mobile_number'] ?? ''); ?>"><?php echo sanitize($emp['mobile_number'] ?? '-'); ?></a>
+                                </td>
+                                <!-- Alternate Mobile -->
+                                <td data-column="alternate_mobile" <?php echo $availableColumns['alternate_mobile']['default'] ? '' : 'style="display:none;"'; ?>>
+                                    <?php echo sanitize($emp['alternate_mobile'] ?? '-'); ?>
+                                </td>
+                                <!-- Email -->
+                                <td data-column="email" <?php echo $availableColumns['email']['default'] ? '' : 'style="display:none;"'; ?>>
+                                    <a href="mailto:<?php echo sanitize($emp['email'] ?? ''); ?>"><?php echo sanitize($emp['email'] ?? '-'); ?></a>
+                                </td>
+                                <!-- Aadhaar Number -->
+                                <td data-column="aadhaar_number" <?php echo $availableColumns['aadhaar_number']['default'] ? '' : 'style="display:none;"'; ?>>
+                                    <?php echo sanitize($emp['aadhaar_number'] ?? '-'); ?>
+                                </td>
+                                <!-- Gender -->
+                                <td data-column="gender" <?php echo $availableColumns['gender']['default'] ? '' : 'style="display:none;"'; ?>>
+                                    <?php echo sanitize($emp['gender'] ?? '-'); ?>
+                                </td>
+                                <!-- Date of Birth -->
+                                <td data-column="date_of_birth" <?php echo $availableColumns['date_of_birth']['default'] ? '' : 'style="display:none;"'; ?>>
+                                    <?php echo formatDate($emp['date_of_birth']); ?>
+                                </td>
+                                <!-- Address -->
+                                <td data-column="address" <?php echo $availableColumns['address']['default'] ? '' : 'style="display:none;"'; ?>>
+                                    <small><?php echo sanitize($emp['address'] ?? '-'); ?></small>
+                                </td>
+                                <!-- State -->
+                                <td data-column="state" <?php echo $availableColumns['state']['default'] ? '' : 'style="display:none;"'; ?>>
+                                    <?php echo sanitize($emp['state'] ?? '-'); ?>
+                                </td>
+                                <!-- District -->
+                                <td data-column="district" <?php echo $availableColumns['district']['default'] ? '' : 'style="display:none;"'; ?>>
+                                    <?php echo sanitize($emp['district'] ?? '-'); ?>
+                                </td>
+                                <!-- Pin Code -->
+                                <td data-column="pin_code" <?php echo $availableColumns['pin_code']['default'] ? '' : 'style="display:none;"'; ?>>
+                                    <?php echo sanitize($emp['pin_code'] ?? '-'); ?>
+                                </td>
+                                <!-- Bank Name -->
+                                <td data-column="bank_name" <?php echo $availableColumns['bank_name']['default'] ? '' : 'style="display:none;"'; ?>>
+                                    <?php echo sanitize($emp['bank_name'] ?? '-'); ?>
+                                </td>
+                                <!-- Account Number -->
+                                <td data-column="account_number" <?php echo $availableColumns['account_number']['default'] ? '' : 'style="display:none;"'; ?>>
+                                    <?php echo sanitize($emp['account_number'] ?? '-'); ?>
+                                </td>
+                                <!-- IFSC Code -->
+                                <td data-column="ifsc_code" <?php echo $availableColumns['ifsc_code']['default'] ? '' : 'style="display:none;"'; ?>>
+                                    <code><?php echo sanitize($emp['ifsc_code'] ?? '-'); ?></code>
+                                </td>
+                                <!-- Nominee Name -->
+                                <td data-column="nominee_name" <?php echo $availableColumns['nominee_name']['default'] ? '' : 'style="display:none;"'; ?>>
+                                    <?php echo sanitize($emp['nominee_name'] ?? '-'); ?>
+                                </td>
+                                <!-- Nominee Relation -->
+                                <td data-column="nominee_relation" <?php echo $availableColumns['nominee_relation']['default'] ? '' : 'style="display:none;"'; ?>>
+                                    <?php echo sanitize($emp['nominee_relationship'] ?? '-'); ?>
+                                </td>
+                                <!-- Emergency Contact -->
+                                <td data-column="emergency_contact" <?php echo $availableColumns['emergency_contact']['default'] ? '' : 'style="display:none;"'; ?>>
+                                    <?php if (!empty($emp['emergency_contact_name'])): ?>
+                                        <div><?php echo sanitize($emp['emergency_contact_name']); ?></div>
+                                        <small class="text-muted"><?php echo sanitize($emp['emergency_contact_relation'] ?? ''); ?></small>
+                                    <?php else: ?>
+                                        -
+                                    <?php endif; ?>
+                                </td>
+                                <!-- Status -->
+                                <td data-column="status" class="text-center" <?php echo $availableColumns['status']['default'] ? '' : 'style="display:none;"'; ?>>
                                     <?php 
                                     $statusClass = 'secondary';
                                     $statusText = $emp['status'] ?? 'Unknown';
@@ -300,7 +474,8 @@ try {
                                     ?>
                                     <span class="badge bg-<?php echo $statusClass; ?>-soft"><?php echo sanitize($statusText); ?></span>
                                 </td>
-                                <td>
+                                <!-- Actions -->
+                                <td data-column="actions" class="text-center" <?php echo $availableColumns['actions']['default'] ? '' : 'style="display:none;"'; ?>>
                                     <div class="btn-group btn-group-sm">
                                         <a href="index.php?page=employee/view&id=<?php echo $emp['id']; ?>" 
                                            class="btn btn-outline-primary" title="View">
@@ -421,6 +596,70 @@ function filterUnits() {
             unitSelect.innerHTML = '<option value="">All Units</option>';
         });
 }
+
+// Column visibility functions - save preferences to localStorage
+function toggleColumn(columnKey, isVisible) {
+    const table = document.getElementById('employees-table');
+    
+    // Toggle header
+    const header = table.querySelector('th[data-column="' + columnKey + '"]');
+    if (header) {
+        header.style.display = isVisible ? '' : 'none';
+    }
+    
+    // Toggle all body cells
+    const cells = table.querySelectorAll('td[data-column="' + columnKey + '"]');
+    cells.forEach(cell => {
+        cell.style.display = isVisible ? '' : 'none';
+    });
+    
+    // Save preference
+    saveColumnPreferences();
+}
+
+function saveColumnPreferences() {
+    const preferences = {};
+    document.querySelectorAll('.column-toggle').forEach(checkbox => {
+        preferences[checkbox.dataset.column] = checkbox.checked;
+    });
+    localStorage.setItem('employeeListColumnPrefs', JSON.stringify(preferences));
+}
+
+function loadColumnPreferences() {
+    const saved = localStorage.getItem('employeeListColumnPrefs');
+    if (saved) {
+        try {
+            const preferences = JSON.parse(saved);
+            Object.keys(preferences).forEach(columnKey => {
+                const checkbox = document.querySelector('.column-toggle[data-column="' + columnKey + '"]');
+                if (checkbox) {
+                    checkbox.checked = preferences[columnKey];
+                    toggleColumn(columnKey, preferences[columnKey]);
+                }
+            });
+        } catch (e) {
+            console.error('Error loading column preferences:', e);
+        }
+    }
+}
+
+function resetColumnVisibility() {
+    localStorage.removeItem('employeeListColumnPrefs');
+    location.reload();
+}
+
+// Initialize column toggle handlers on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Add change handlers to all column toggles
+    document.querySelectorAll('.column-toggle').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            toggleColumn(this.dataset.column, this.checked);
+        });
+    });
+    
+    // Load saved preferences
+    loadColumnPreferences();
+});
 </script>
 JS;
 ?>

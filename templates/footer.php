@@ -33,7 +33,9 @@
     </div>
     <?php endif; ?>
     
-    <?php if (isset($extraModals)) echo $extraModals; ?>
+    <?php if (isset($extraModals)) {
+        echo $extraModals;
+    } ?>
     
     <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
@@ -70,12 +72,16 @@
     <!-- Custom JS -->
     <script src="assets/js/app.js"></script>
     
-    <?php if (isset($extraJS)) echo $extraJS; ?>
+    <?php if (isset($extraJS)) {
+        echo $extraJS;
+    } ?>
     
     <script>
         // Initialize page-specific functionality
         $(document).ready(function() {
-            <?php if (isset($inlineJS)) echo $inlineJS; ?>
+            <?php if (isset($inlineJS)) {
+                echo $inlineJS;
+            } ?>
         });
     </script>
 </body>

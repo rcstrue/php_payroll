@@ -5,8 +5,8 @@
 
 $pageTitle = 'Upload Attendance';
 
-// Get units - use COALESCE to handle both 'name' and 'unit_name'/'client_name' columns
-$stmt = $db->query("SELECT u.id, COALESCE(u.name, u.unit_name) as unit_name, COALESCE(c.name, c.client_name) as client_name FROM units u LEFT JOIN clients c ON u.client_id = c.id WHERE u.is_active = 1 ORDER BY client_name, unit_name");
+// Get units with client names
+$stmt = $db->query("SELECT u.id, u.name as unit_name, c.name as client_name FROM units u LEFT JOIN clients c ON u.client_id = c.id WHERE u.is_active = 1 ORDER BY c.name, u.name");
 $units = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Handle upload
@@ -98,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['attendance_file'])) 
                                 $currentYear = date('Y');
                                 for ($y = $currentYear; $y >= $currentYear - 2; $y--):
                                 ?>
-                                <option value="<?php echo $y; ?>"><?php echo $y; ?></option>
+                                    <option value="<?php echo $y; ?>"><?php echo $y; ?></option>
                                 <?php endfor; ?>
                             </select>
                         </div>
@@ -215,9 +215,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['attendance_file'])) 
                             
                             if (empty($recentUploads)):
                             ?>
-                            <tr>
-                                <td colspan="5" class="text-center py-4 text-muted">No uploads yet</td>
-                            </tr>
+                                <tr>
+                                    <td colspan="5" class="text-center py-4 text-muted">No uploads yet</td>
+                                </tr>
                             <?php else: ?>
                             <?php foreach ($recentUploads as $upload): 
                                 $stmt2 = $db->prepare("SELECT name as unit_name FROM units WHERE id = ?");

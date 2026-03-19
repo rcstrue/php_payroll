@@ -12,7 +12,7 @@ $monthFilter = isset($_GET['month']) ? (int)$_GET['month'] : (int)date('m');
 $yearFilter = isset($_GET['year']) ? (int)$_GET['year'] : (int)date('Y');
 
 // Get clients for filter
-$clients = $db->query("SELECT DISTINCT COALESCE(c.name, c.client_name, e.client_name) as client_name FROM employees e LEFT JOIN clients c ON e.client_id = c.id WHERE e.client_name IS NOT NULL AND e.client_name != '' ORDER BY client_name")->fetchAll(PDO::FETCH_ASSOC);
+$clients = $db->query("SELECT DISTINCT c.name as client_name FROM employees e LEFT JOIN clients c ON e.client_id = c.id WHERE c.name IS NOT NULL AND c.name != '' ORDER BY c.name")->fetchAll(PDO::FETCH_ASSOC);
 
 // Initialize units array
 $units = [];
@@ -22,26 +22,26 @@ $where = "MONTH(a.attendance_date) = ? AND YEAR(a.attendance_date) = ?";
 $params = ['month' => $monthFilter, 'year' => $yearFilter];
 
 if ($clientFilter) {
-    $where .= " AND COALESCE(c.name, c.client_name, e.client_name) = :client";
+    $where .= " AND c.name = :client";
     $params['client'] = $clientFilter;
 }
 
 if ($unitFilter) {
-    $where .= " AND COALESCE(u.name, u.unit_name, e.unit_name) = :unit";
+    $where .= " AND u.name = :unit";
     $params['unit'] = $unitFilter;
 }
 
 // Get units for selected client
 if ($clientFilter) {
-    $stmt = $db->prepare("SELECT DISTINCT COALESCE(u.name, u.unit_name, e.unit_name) as unit_name FROM employees e LEFT JOIN units u ON e.unit_id = u.id WHERE COALESCE(e.client_name, (SELECT name FROM clients WHERE id = e.client_id)) = ? AND e.unit_name IS NOT NULL AND e.unit_name != '' ORDER BY unit_name");
+    $stmt = $db->prepare("SELECT DISTINCT u.name as unit_name FROM employees e LEFT JOIN units u ON e.unit_id = u.id LEFT JOIN clients c ON e.client_id = c.id WHERE c.name = ? AND u.name IS NOT NULL AND u.name != '' ORDER BY u.name");
     $stmt->execute([$clientFilter]);
     $units = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
 // Get attendance summary
 $sql = "SELECT 
-    COALESCE(c.name, c.client_name, e.client_name) as client_name,
-    COALESCE(u.name, u.unit_name, e.unit_name) as unit_name,
+    c.name as client_name,
+    u.name as unit_name,
     COUNT(*) as total_records,
     SUM(CASE WHEN a.status = 'Present' THEN 1 ELSE 0 END) as present,
     SUM(CASE WHEN a.status = 'Absent' THEN 1 ELSE 0 END) as absent,
@@ -52,7 +52,7 @@ $sql = "SELECT
     LEFT JOIN clients c ON e.client_id = c.id
     LEFT JOIN units u ON e.unit_id = u.id
     WHERE {$where}
-    GROUP BY COALESCE(c.name, c.client_name, e.client_name), COALESCE(u.name, u.unit_name, e.unit_name)";
+    GROUP BY c.name, u.name";
 
 $stmt = $db->prepare($sql);
 $stmt->execute($params);

@@ -212,17 +212,17 @@ include '../../templates/header.php';
                         <div class="col-md-6">
                             <label class="form-label required">Designation</label>
                             <input type="text" name="designation" class="form-control" 
-                                   value="<?php echo sanitize($deployment['designation']); ?>" required>
+                                   value="<?php echo htmlspecialchars($deployment['designation'], ENT_QUOTES, 'UTF-8'); ?>" required>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Department</label>
                             <input type="text" name="department" class="form-control" 
-                                   value="<?php echo sanitize($deployment['department']); ?>">
+                                   value="<?php echo htmlspecialchars($deployment['department'], ENT_QUOTES, 'UTF-8'); ?>">
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Reporting To</label>
                             <input type="text" name="reporting_to" class="form-control" 
-                                   value="<?php echo sanitize($deployment['reporting_to']); ?>" placeholder="Supervisor name">
+                                   value="<?php echo htmlspecialchars($deployment['reporting_to'], ENT_QUOTES, 'UTF-8'); ?>" placeholder="Supervisor name">
                         </div>
                     </div>
                 </div>
@@ -238,12 +238,12 @@ include '../../templates/header.php';
                         <div class="col-md-6">
                             <label class="form-label required">Deployment Date</label>
                             <input type="date" name="deployment_date" class="form-control" 
-                                   value="<?php echo sanitize($deployment['deployment_date']); ?>" required>
+                                   value="<?php echo htmlspecialchars($deployment['deployment_date'], ENT_QUOTES, 'UTF-8'); ?>" required>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Expected End Date</label>
                             <input type="date" name="end_date" class="form-control" 
-                                   value="<?php echo sanitize($deployment['end_date']); ?>">
+                                   value="<?php echo htmlspecialchars($deployment['end_date'], ENT_QUOTES, 'UTF-8'); ?>">
                         </div>
                         <div class="col-md-6">
                             <label class="form-label required">Billing Rate</label>

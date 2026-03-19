@@ -2,6 +2,9 @@
 /**
  * RCS HRMS Pro - ESI Returns Generator
  * Generates ESI return file for ESIC portal upload
+ * 
+ * IMPORTANT: employees table does NOT have client_name or unit_name columns.
+ * Always use JOIN with clients and units tables to get client/unit names.
  */
 
 require_once '../../config/config.php';
@@ -29,12 +32,11 @@ $clientFilter = isset($_GET['client']) ? sanitize($_GET['client']) : '';
 // Get company details
 $company = $db->fetch("SELECT * FROM companies LIMIT 1");
 
-// Get clients for filter
+// Get clients for filter - use clients table directly
 $clients = $db->query(
-    "SELECT DISTINCT COALESCE(c.name, c.client_name, e.client_name) as client_name 
-     FROM employees e 
-     LEFT JOIN clients c ON e.client_id = c.id 
-     WHERE e.client_name IS NOT NULL AND e.client_name != '' 
+    "SELECT DISTINCT c.name as client_name 
+     FROM clients c 
+     WHERE c.is_active = 1 
      ORDER BY client_name"
 )->fetchAll(PDO::FETCH_ASSOC);
 
@@ -43,7 +45,7 @@ $where = "pp.month = :month AND pp.year = :year AND e.is_esi_applicable = 1";
 $params = [':month' => $month, ':year' => $year];
 
 if ($clientFilter) {
-    $where .= " AND COALESCE(c.name, c.client_name, e.client_name) = :client";
+    $where .= " AND c.name = :client";
     $params[':client'] = $clientFilter;
 }
 
@@ -61,7 +63,7 @@ $sql = "SELECT
             p.esi_employee,
             p.esi_employer,
             p.present_days,
-            COALESCE(c.name, c.client_name, e.client_name) as client_name
+            c.name as client_name
         FROM payroll p
         JOIN employees e ON p.employee_id = e.employee_code
         LEFT JOIN clients c ON e.client_id = c.id

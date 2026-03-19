@@ -32,8 +32,8 @@ $payslip = $db->fetch(
             e.employee_code, e.full_name, e.father_name, e.designation, e.department,
             e.date_of_joining, e.uan_number, e.esi_number, e.pan_number,
             e.bank_name, e.bank_account_number, e.bank_ifsc_code,
-            COALESCE(c.name, c.client_name) as client_name,
-            COALESCE(u.name, u.unit_name) as unit_name
+            c.name as client_name,
+            u.name as unit_name
      FROM payroll p
      JOIN payroll_periods pp ON p.payroll_period_id = pp.id
      JOIN employees e ON p.employee_id = e.id
@@ -335,7 +335,9 @@ include '../../templates/header.php';
                                                     : $words[floor($number / 10) * 10]
                                                     . " " . $words[$number % 10] . " "
                                                     . $digits[$counter] . $plural . " " . $hundred;
-                                            } else $str[] = null;
+                                            } else {
+                                            $str[] = null;
+                                        }
                                         }
                                         $str = array_reverse($str);
                                         $result = implode('', $str);

@@ -22,8 +22,8 @@ $employeeId = $_SESSION['employee_portal']['employee_id'];
 // Get full employee details
 $employee = $db->fetch(
     "SELECT e.*, 
-            COALESCE(c.name, c.client_name, e.client_name) as client_name,
-            COALESCE(u.name, u.unit_name, e.unit_name) as unit_name
+            c.name as client_name,
+            u.name as unit_name
      FROM employees e
      LEFT JOIN clients c ON e.client_id = c.id
      LEFT JOIN units u ON e.unit_id = u.id
@@ -73,8 +73,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             
             // Refresh data
             $employee = $db->fetch(
-                "SELECT e.*, COALESCE(c.name, c.client_name, e.client_name) as client_name,
-                        COALESCE(u.name, u.unit_name, e.unit_name) as unit_name
+                "SELECT e.*, c.name as client_name,
+                        u.name as unit_name
                  FROM employees e
                  LEFT JOIN clients c ON e.client_id = c.id
                  LEFT JOIN units u ON e.unit_id = u.id
@@ -102,8 +102,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             
             // Refresh data
             $employee = $db->fetch(
-                "SELECT e.*, COALESCE(c.name, c.client_name, e.client_name) as client_name,
-                        COALESCE(u.name, u.unit_name, e.unit_name) as unit_name
+                "SELECT e.*, c.name as client_name,
+                        u.name as unit_name
                  FROM employees e
                  LEFT JOIN clients c ON e.client_id = c.id
                  LEFT JOIN units u ON e.unit_id = u.id
@@ -131,8 +131,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             
             // Refresh data
             $employee = $db->fetch(
-                "SELECT e.*, COALESCE(c.name, c.client_name, e.client_name) as client_name,
-                        COALESCE(u.name, u.unit_name, e.unit_name) as unit_name
+                "SELECT e.*, c.name as client_name,
+                        u.name as unit_name
                  FROM employees e
                  LEFT JOIN clients c ON e.client_id = c.id
                  LEFT JOIN units u ON e.unit_id = u.id

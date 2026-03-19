@@ -41,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         // Get all eligible employees
         $eligibleEmployees = $db->fetchAll(
             "SELECT e.id, e.employee_code, e.full_name, e.date_of_joining, e.date_of_leaving,
-                    e.is_bonus_applicable, COALESCE(c.name, c.client_name) as client_name,
+                    e.is_bonus_applicable, c.name as client_name,
                     ess.basic_wage, ess.gross_salary
              FROM employees e
              LEFT JOIN employee_salary_structures ess ON e.id = ess.employee_id 
@@ -126,7 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         ];
         
         setFlash('success', "Bonus calculated for " . count($bonusRecords) . " employees. Total: ₹" . number_format($totalBonus, 2));
-        redirect('index.php?page=payroll/bonus');
+        redirect(BONUS_PAGE_URL);
     }
     
     if ($_POST['action'] === 'save_bonus') {
@@ -134,7 +134,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         
         if (!$preview) {
             setFlash('error', 'No bonus data to save');
-            redirect('index.php?page=payroll/bonus');
+            redirect(BONUS_PAGE_URL);
         }
         
         try {
@@ -156,8 +156,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         'bonus_rate' => $record['bonus_rate'],
                         'bonus_amount' => $record['bonus_amount'],
                         'status' => 'calculated',
-                        'updated_at' => date('Y-m-d H:i:s')
-                    ], 'id = :id', ['id' => $existing['id']]);
+                        'updated_at' => date(DATETIME_FORMAT_DB)
+                    ], SQL_WHERE_ID, ['id' => $existing['id']]);
                 } else {
                     // Insert
                     $db->insert('employee_bonus', [
@@ -169,7 +169,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         'bonus_amount' => $record['bonus_amount'],
                         'status' => 'calculated',
                         'created_by' => $_SESSION['user_id'],
-                        'created_at' => date('Y-m-d H:i:s')
+                        'created_at' => date(DATETIME_FORMAT_DB)
                     ]);
                 }
             }
@@ -178,7 +178,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             unset($_SESSION['bonus_preview']);
             
             setFlash('success', 'Bonus records saved successfully');
-            redirect('index.php?page=payroll/bonus');
+            redirect(BONUS_PAGE_URL);
         } catch (Exception $e) {
             $db->rollBack();
             setFlash('error', 'Error saving bonus: ' . $e->getMessage());
@@ -194,7 +194,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         
         if (!$bonus) {
             setFlash('error', 'Bonus record not found');
-            redirect('index.php?page=payroll/bonus');
+            redirect(BONUS_PAGE_URL);
         }
         
         // Get or create payroll period
@@ -215,7 +215,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 'end_date' => $endDate,
                 'status' => 'draft',
                 'created_by' => $_SESSION['user_id'],
-                'created_at' => date('Y-m-d H:i:s')
+                'created_at' => date(DATETIME_FORMAT_DB)
             ]);
         } else {
             $periodId = $period['id'];
@@ -231,8 +231,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $db->update('payroll', [
                 'bonus' => $existingPayroll['bonus'] + $bonus['bonus_amount'],
                 'net_salary' => $existingPayroll['net_salary'] + $bonus['bonus_amount'],
-                'updated_at' => date('Y-m-d H:i:s')
-            ], 'id = :id', ['id' => $existingPayroll['id']]);
+                'updated_at' => date(DATETIME_FORMAT_DB)
+            ], SQL_WHERE_ID, ['id' => $existingPayroll['id']]);
         } else {
             $db->insert('payroll', [
                 'payroll_period_id' => $periodId,
@@ -240,26 +240,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 'bonus' => $bonus['bonus_amount'],
                 'net_salary' => $bonus['bonus_amount'],
                 'payment_status' => 'pending',
-                'created_at' => date('Y-m-d H:i:s')
+                'created_at' => date(DATETIME_FORMAT_DB)
             ]);
         }
         
         // Update bonus status
         $db->update('employee_bonus', [
             'status' => 'disbursed',
-            'disbursed_at' => date('Y-m-d H:i:s'),
+            'disbursed_at' => date(DATETIME_FORMAT_DB),
             'payment_period_id' => $periodId
-        ], 'id = :id', ['id' => $bonusId]);
+        ], SQL_WHERE_ID, ['id' => $bonusId]);
         
         setFlash('success', 'Bonus added to payroll for disbursement');
-        redirect('index.php?page=payroll/bonus');
+        redirect(BONUS_PAGE_URL);
     }
 }
 
 // Get existing bonus records
 $bonusRecords = $db->fetchAll(
     "SELECT b.*, e.employee_code, e.full_name, 
-            COALESCE(c.name, c.client_name) as client_name
+            c.name as client_name
      FROM employee_bonus b
      JOIN employees e ON b.employee_id = e.id
      LEFT JOIN clients c ON e.client_id = c.id
@@ -483,9 +483,9 @@ include '../../templates/header.php';
                             $currentFY = date('n') >= 4 ? date('Y') : date('Y') - 1;
                             for ($fy = $currentFY; $fy >= $currentFY - 3; $fy--): 
                             ?>
-                            <option value="<?php echo $fy; ?>-<?php echo $fy+1; ?>">
-                                FY <?php echo $fy; ?>-<?php echo substr($fy+1, -2); ?>
-                            </option>
+                                <option value="<?php echo $fy; ?>-<?php echo $fy+1; ?>">
+                                    FY <?php echo $fy; ?>-<?php echo substr($fy+1, -2); ?>
+                                </option>
                             <?php endfor; ?>
                         </select>
                     </div>

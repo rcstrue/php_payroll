@@ -24,8 +24,8 @@ $employeeId = $_SESSION['employee_portal']['employee_id'];
 // Get employee details
 $employee = $db->fetch(
     "SELECT e.*, 
-            COALESCE(c.name, c.client_name, e.client_name) as client_name,
-            COALESCE(u.name, u.unit_name, e.unit_name) as unit_name,
+            c.name as client_name,
+            u.name as unit_name,
             ess.basic_wage, ess.da, ess.hra, ess.gross_salary
      FROM employees e
      LEFT JOIN employee_salary_structures ess ON e.id = ess.employee_id 

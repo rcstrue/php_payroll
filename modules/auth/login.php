@@ -47,7 +47,7 @@ $flash = getFlash();
                 <label for="username" class="form-label">Username</label>
                 <input type="text" class="form-control" id="username" name="username" 
                        placeholder="Enter your username" required autofocus
-                       value="<?php echo sanitize($_POST['username'] ?? ''); ?>">
+                       value="<?php echo htmlspecialchars($_POST['username'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
             </div>
             
             <div class="form-group mb-3">

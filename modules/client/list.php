@@ -271,15 +271,21 @@ $clients = $client->getAll(false);
     <input type="hidden" name="client_id" id="delete_client_id">
 </form>
 
-<script>
-$(document).ready(function() {
-    $('#clientsTable').DataTable({
-        responsive: true,
-        pageLength: 25,
-        order: [[1, 'asc']]
-    });
+<?php
+// Page-specific JavaScript for DataTable initialization (wrapped in document.ready by footer)
+$inlineJS = <<<'JS'
+// Initialize DataTable
+$('#clientsTable').DataTable({
+    responsive: true,
+    pageLength: 25,
+    order: [[1, 'asc']]
 });
+JS;
 
+// Extra JS with script tags (output after jQuery loads)
+$extraJS = <<<'JS'
+<script>
+// Edit client function - must be global for onclick
 function editClient(client) {
     $('#edit_client_id').val(client.id);
     $('#edit_client_name').val(client.client_name || client.name || '');
@@ -295,6 +301,7 @@ function editClient(client) {
     new bootstrap.Modal('#editClientModal').show();
 }
 
+// Delete client function - must be global for onclick
 function deleteClient(id) {
     if (confirm('Are you sure you want to delete this client?')) {
         $('#delete_client_id').val(id);
@@ -302,3 +309,5 @@ function deleteClient(id) {
     }
 }
 </script>
+JS;
+?>

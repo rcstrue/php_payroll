@@ -1,6 +1,13 @@
 <?php
 /**
  * RCS HRMS Pro - Custom Report Builder
+ * 
+ * IMPORTANT: employees table does NOT have client_name or unit_name columns.
+ * Always use JOIN with clients and units tables to get client/unit names.
+ * 
+ * Database Schema:
+ * - employees.client_id → clients.id (use JOIN to get clients.name AS client_name)
+ * - employees.unit_id → units.id (use JOIN to get units.name AS unit_name)
  */
 
 $pageTitle = 'Custom Report Builder';
@@ -108,6 +115,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Build base query with joins
             $sql = "SELECT " . implode(', ', $selectParts) . " FROM employees e";
             
+            // IMPORTANT: Always JOIN clients and units to get client_name and unit_name
+            $sql .= " LEFT JOIN clients c ON e.client_id = c.id";
+            $sql .= " LEFT JOIN units u ON e.unit_id = u.id";
+            
             if (in_array('attendance', $selectedTables)) {
                 $sql .= " LEFT JOIN attendance_summary a ON e.employee_code = a.employee_id";
             }
@@ -125,7 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $params = [];
             
             if (!empty($filters['client_name'])) {
-                $whereParts[] = "e.client_name = :client_name";
+                $whereParts[] = "c.name = :client_name";
                 $params['client_name'] = sanitize($filters['client_name']);
             }
             
@@ -182,8 +193,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Get clients for filter
-$clients = $db->query("SELECT DISTINCT client_name FROM employees WHERE client_name IS NOT NULL ORDER BY client_name")->fetchAll(PDO::FETCH_ASSOC);
+// Get clients for filter - use clients table, not employees.client_name
+$clients = $db->query("SELECT DISTINCT c.name as client_name FROM clients c WHERE c.is_active = 1 ORDER BY c.name")->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 <div class="row">
@@ -198,7 +209,7 @@ $clients = $db->query("SELECT DISTINCT client_name FROM employees WHERE client_n
                     
                     <div class="mb-3">
                         <label class="form-label">Report Title</label>
-                        <input type="text" class="form-control" name="report_title" value="<?php echo sanitize($reportTitle); ?>">
+                        <input type="text" class="form-control" name="report_title" value="<?php echo htmlspecialchars($reportTitle, ENT_QUOTES, 'UTF-8'); ?>">
                     </div>
                     
                     <div class="mb-3">
@@ -347,7 +358,7 @@ $clients = $db->query("SELECT DISTINCT client_name FROM employees WHERE client_n
             <div class="card-header">
                 <h5 class="card-title mb-0">
                     <i class="bi bi-table me-2"></i>
-                    <?php echo sanitize($reportTitle); ?>
+                    <?php echo htmlspecialchars($reportTitle, ENT_QUOTES, 'UTF-8'); ?>
                     <?php if (!empty($reportData)): ?>
                     <span class="badge bg-secondary ms-2"><?php echo count($reportData); ?> records</span>
                     <?php endif; ?>
@@ -365,7 +376,7 @@ $clients = $db->query("SELECT DISTINCT client_name FROM employees WHERE client_n
                         <thead>
                             <tr>
                                 <?php foreach (array_keys($reportData[0]) as $col): ?>
-                                <th><?php echo ucwords(str_replace('_', ' ', $col)); ?></th>
+                                <th><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $col)), ENT_QUOTES, 'UTF-8'); ?></th>
                                 <?php endforeach; ?>
                             </tr>
                         </thead>

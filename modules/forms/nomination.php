@@ -2,6 +2,9 @@
 /**
  * RCS HRMS Pro - Nomination Forms Hub
  * Central page for all nomination forms (PF, ESI, Gratuity)
+ * 
+ * IMPORTANT: employees table does NOT have client_name or unit_name columns.
+ * Always use JOIN with clients and units tables to get client/unit names.
  */
 
 $pageTitle = 'Nomination Forms';
@@ -38,12 +41,14 @@ if ($unitId) {
 // Get selected employee details
 $selectedEmployee = null;
 if ($employeeId) {
-    $baseColumns = "e.id, e.employee_code, e.full_name, e.father_name, e.date_of_birth, e.gender, 
+    // IMPORTANT: Use JOINs to get client_name and unit_name from related tables
+    $stmt = $db->prepare("SELECT e.id, e.employee_code, e.full_name, e.father_name, e.date_of_birth, e.gender, 
                     e.aadhaar_number, e.mobile_number, e.address, e.nominee_name, e.nominee_relationship,
                     e.nominee_dob, e.nominee_contact, e.date_of_joining,
-                    e.client_name, e.unit_name, e.designation";
-    $stmt = $db->prepare("SELECT $baseColumns, ess.pf_applicable, ess.esi_applicable, ess.gross_salary
+                    c.name as client_name, u.name as unit_name, e.designation, ess.pf_applicable, ess.esi_applicable, ess.gross_salary
                           FROM employees e
+                          LEFT JOIN clients c ON e.client_id = c.id
+                          LEFT JOIN units u ON e.unit_id = u.id
                           LEFT JOIN employee_salary_structures ess ON e.id = ess.employee_id 
                             AND (ess.effective_to IS NULL OR ess.effective_to >= CURDATE())
                           WHERE e.id = ?");

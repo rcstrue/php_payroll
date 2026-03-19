@@ -2,9 +2,19 @@
 /**
  * RCS HRMS Pro - Unit List
  * Updated with compulsory unit_code and state dropdown
+ *
+ * NOTE: JavaScript pattern uses $inlineJS (wrapped in document.ready) and $extraJS (output after jQuery)
+ * This ensures jQuery is loaded before any $() calls are made.
+ * The editUnit and deleteUnit functions are defined as window.editUnit/deleteUnit for global onclick access.
+ *
+ * NOTE: Client dropdown uses $client->getList() which returns 'name' column (aliased from either 'name' or 'client_name')
+ * to handle different database schema configurations.
  */
 
 $pageTitle = 'Units';
+
+// Define redirect URL constant to avoid string duplication
+define('UNIT_LIST_URL', 'index.php?page=unit/list');
 
 // Get filter
 $clientFilter = isset($_GET['client']) ? (int)$_GET['client'] : 0;
@@ -38,7 +48,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if (preg_match('/(\d+)$/', $lastUnit['unit_code'], $matches)) {
                         $num = (int)$matches[1] + 1;
                         $prefix = preg_replace('/\d+$/', '', $lastUnit['unit_code']);
-                        if (empty($prefix)) $prefix = 'UNT';
+                        if (empty($prefix)) {
+                            $prefix = 'UNT';
+                        }
                         $unitCode = $prefix . str_pad($num, 3, '0', STR_PAD_LEFT);
                     } else {
                         $unitCode = 'UNT001';
@@ -57,13 +69,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $exists = $stmt->fetch(PDO::FETCH_ASSOC);
         if ($exists) {
             setFlash('error', "Unit code '$unitCode' already exists! Please use a different code.");
-            redirect('index.php?page=unit/list');
+            redirect(UNIT_LIST_URL);
         }
         
         $state = sanitize($_POST['state'] ?? '');
         if (empty($state)) {
             setFlash('error', 'State is required!');
-            redirect('index.php?page=unit/list');
+            redirect(UNIT_LIST_URL);
         }
         
         $data = [
@@ -81,7 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $result = $unit->create($data);
         setFlash($result['success'] ? 'success' : 'error', $result['message']);
-        redirect('index.php?page=unit/list');
+        redirect(UNIT_LIST_URL);
     }
 
     if ($action === 'edit' && isset($_POST['unit_id'])) {
@@ -94,17 +106,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $exists = $stmt->fetch(PDO::FETCH_ASSOC);
             if ($exists) {
                 setFlash('error', "Unit code '$unitCode' already exists! Please use a different code.");
-                redirect('index.php?page=unit/list');
+                redirect(UNIT_LIST_URL);
             }
         } else {
             setFlash('error', 'Unit Code is required!');
-            redirect('index.php?page=unit/list');
+            redirect(UNIT_LIST_URL);
         }
         
         $state = sanitize($_POST['state'] ?? '');
         if (empty($state)) {
             setFlash('error', 'State is required!');
-            redirect('index.php?page=unit/list');
+            redirect(UNIT_LIST_URL);
         }
         
         $data = [
@@ -122,18 +134,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $result = $unit->update($_POST['unit_id'], $data);
         setFlash('success', 'Unit updated successfully!');
-        redirect('index.php?page=unit/list');
+        redirect(UNIT_LIST_URL);
     }
 
     if ($action === 'delete' && isset($_POST['unit_id'])) {
         $result = $unit->delete($_POST['unit_id']);
         setFlash($result['success'] ? 'success' : 'error', $result['message']);
-        redirect('index.php?page=unit/list');
+        redirect(UNIT_LIST_URL);
     }
 }
 
 // Get all clients for dropdown
-$clients = $client->getList();
+// NOTE: Directly query to handle both 'name' and 'client_name' column variations
+try {
+    // Check which column exists in clients table
+    $colCheck = $db->query("SHOW COLUMNS FROM clients LIKE 'name'");
+    $nameCol = ($colCheck && $colCheck->rowCount() > 0) ? 'name' : 'client_name';
+    $clients = $db->query("SELECT id, {$nameCol} as name, client_code FROM clients WHERE is_active = 1 ORDER BY {$nameCol}")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    // Fallback: try with client_name if name check fails
+    try {
+        $clients = $db->query("SELECT id, client_name as name, client_code FROM clients WHERE is_active = 1 ORDER BY client_name")->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Exception $e2) {
+        $clients = [];
+    }
+}
 
 // Get units
 $units = $unit->getAll($clientFilter ?: null, false);
@@ -165,7 +190,7 @@ $units = $unit->getAll($clientFilter ?: null, false);
                     <div class="col-md-2">
                         <button type="submit" class="btn btn-sm btn-primary">Filter</button>
                         <?php if ($clientFilter): ?>
-                        <a href="index.php?page=unit/list" class="btn btn-sm btn-secondary">Clear</a>
+                        <a href="<?php echo UNIT_LIST_URL; ?>" class="btn btn-sm btn-secondary">Clear</a>
                         <?php endif; ?>
                     </div>
                 </form>
@@ -268,7 +293,7 @@ $units = $unit->getAll($clientFilter ?: null, false);
                             <select class="form-select" name="state" required>
                                 <option value="">Select State</option>
                                 <?php foreach ($statesList as $state): ?>
-                                <option value="<?php echo sanitize($state); ?>"><?php echo sanitize($state); ?></option>
+                                <option value="<?php echo htmlspecialchars($state, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($state, ENT_QUOTES, 'UTF-8'); ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
@@ -345,7 +370,7 @@ $units = $unit->getAll($clientFilter ?: null, false);
                             <select class="form-select" name="state" id="edit_state" required>
                                 <option value="">Select State</option>
                                 <?php foreach ($statesList as $state): ?>
-                                <option value="<?php echo sanitize($state); ?>"><?php echo sanitize($state); ?></option>
+                                <option value="<?php echo htmlspecialchars($state, ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($state, ENT_QUOTES, 'UTF-8'); ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
@@ -392,26 +417,31 @@ $units = $unit->getAll($clientFilter ?: null, false);
     <input type="hidden" name="unit_id" id="delete_unit_id">
 </form>
 
-<script>
-$(document).ready(function() {
-    $('#unitsTable').DataTable({
-        responsive: true,
-        pageLength: 25,
-        order: [[0, 'asc'], [2, 'asc']]
-    });
-    
-    // Auto-generate unit code when add modal opens
-    $('#addUnitModal').on('shown.bs.modal', function() {
-        // Clear the form
-        $('#add_unit_name').val('');
-        $('#add_unit_code').val('');
-        $('#add_client_id').val('');
-        
-        // Generate unit code
-        generateUnitCode();
-    });
+<?php
+// Page-specific JavaScript for DataTable initialization (wrapped in document.ready by footer)
+$inlineJS = <<<'JS'
+// Initialize DataTable
+$('#unitsTable').DataTable({
+    responsive: true,
+    pageLength: 25,
+    order: [[0, 'asc'], [2, 'asc']]
 });
 
+// Auto-generate unit code when add modal opens
+$('#addUnitModal').on('shown.bs.modal', function() {
+    // Clear the form
+    $('#add_unit_name').val('');
+    $('#add_unit_code').val('');
+    $('#add_client_id').val('');
+    
+    // Generate unit code
+    generateUnitCode();
+});
+JS;
+
+// Extra JS with script tags (output after jQuery loads)
+$extraJS = <<<'JS'
+<script>
 // Generate next unit code via AJAX
 function generateUnitCode() {
     $.ajax({
@@ -453,3 +483,5 @@ window.deleteUnit = function(id) {
     }
 };
 </script>
+JS;
+?>

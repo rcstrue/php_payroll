@@ -174,6 +174,9 @@ function tableExists($db, $tableName) {
                                             $icon = 'bi-info-circle';
                                             $iconColor = 'text-info';
                                             break;
+                                        default:
+                                            // Default bell icon for unknown types
+                                            break;
                                     }
                                 }
                                 ?>
@@ -233,19 +236,19 @@ function tableExists($db, $tableName) {
                     <ul class="pagination justify-content-center mb-0">
                         <?php if ($page > 1): ?>
                         <li class="page-item">
-                            <a class="page-link" href="?page=notifications&filter=<?php echo sanitize($filter); ?>&pg=<?php echo $page - 1; ?>">Previous</a>
+                            <a class="page-link" href="?page=notifications&filter=<?php echo htmlspecialchars($filter, ENT_QUOTES, 'UTF-8'); ?>&pg=<?php echo $page - 1; ?>">Previous</a>
                         </li>
                         <?php endif; ?>
                         
                         <?php for ($i = max(1, $page - 2); $i <= min($totalPages, $page + 2); $i++): ?>
                         <li class="page-item <?php echo $i === $page ? 'active' : ''; ?>">
-                            <a class="page-link" href="?page=notifications&filter=<?php echo sanitize($filter); ?>&pg=<?php echo $i; ?>"><?php echo $i; ?></a>
+                            <a class="page-link" href="?page=notifications&filter=<?php echo htmlspecialchars($filter, ENT_QUOTES, 'UTF-8'); ?>&pg=<?php echo $i; ?>"><?php echo $i; ?></a>
                         </li>
                         <?php endfor; ?>
                         
                         <?php if ($page < $totalPages): ?>
                         <li class="page-item">
-                            <a class="page-link" href="?page=notifications&filter=<?php echo sanitize($filter); ?>&pg=<?php echo $page + 1; ?>">Next</a>
+                            <a class="page-link" href="?page=notifications&filter=<?php echo htmlspecialchars($filter, ENT_QUOTES, 'UTF-8'); ?>&pg=<?php echo $page + 1; ?>">Next</a>
                         </li>
                         <?php endif; ?>
                     </ul>
