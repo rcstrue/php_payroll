@@ -135,13 +135,17 @@ class Employee {
             $params['worker_category'] = $filters['worker_category'];
         }
 
-        // Search filter
+        // Search filter - use unique parameter names for PDO with emulated prepares disabled
         if (!empty($filters['search'])) {
-            $sql .= " AND (e.employee_code LIKE :search
-                      OR e.full_name LIKE :search
-                      OR e.mobile_number LIKE :search
-                      OR e.aadhaar_number LIKE :search)";
-            $params['search'] = '%' . $filters['search'] . '%';
+            $sql .= " AND (e.employee_code LIKE :search1
+                      OR e.full_name LIKE :search2
+                      OR e.mobile_number LIKE :search3
+                      OR e.aadhaar_number LIKE :search4)";
+            $searchTerm = '%' . $filters['search'] . '%';
+            $params['search1'] = $searchTerm;
+            $params['search2'] = $searchTerm;
+            $params['search3'] = $searchTerm;
+            $params['search4'] = $searchTerm;
         }
 
         // Count total
@@ -280,12 +284,12 @@ class Employee {
             'special_allowance' => floatval($data['special_allowance'] ?? 0),
             'other_allowance' => floatval($data['other_allowance'] ?? 0),
             'gross_salary' => floatval($data['gross_salary'] ?? 0),
-            'pf_applicable' => !empty($data['pf_applicable']) ? 1 : 1,
-            'esi_applicable' => !empty($data['esi_applicable']) ? 1 : 1,
-            'pt_applicable' => !empty($data['pt_applicable']) ? 1 : 1,
-            'lwf_applicable' => !empty($data['lwf_applicable']) ? 1 : 1,
-            'bonus_applicable' => !empty($data['bonus_applicable']) ? 1 : 1,
-            'gratuity_applicable' => !empty($data['gratuity_applicable']) ? 1 : 1,
+            'pf_applicable' => !empty($data['pf_applicable']) ? 1 : 0,
+            'esi_applicable' => !empty($data['esi_applicable']) ? 1 : 0,
+            'pt_applicable' => !empty($data['pt_applicable']) ? 1 : 0,
+            'lwf_applicable' => !empty($data['lwf_applicable']) ? 1 : 0,
+            'bonus_applicable' => !empty($data['bonus_applicable']) ? 1 : 0,
+            'gratuity_applicable' => !empty($data['gratuity_applicable']) ? 1 : 0,
             'overtime_applicable' => !empty($data['overtime_applicable']) ? 1 : 0,
         ];
     }
@@ -415,10 +419,10 @@ class Employee {
                 'special_allowance' => floatval($data['special_allowance'] ?? 0),
                 'other_allowance' => floatval($data['other_allowance'] ?? 0),
                 'gross_salary' => floatval($data['gross_salary'] ?? 0),
-                'pf_applicable' => !empty($data['pf_applicable']) ? 1 : 1,
-                'esi_applicable' => !empty($data['esi_applicable']) ? 1 : 1,
-                'pt_applicable' => !empty($data['pt_applicable']) ? 1 : 1,
-                'lwf_applicable' => !empty($data['lwf_applicable']) ? 1 : 1,
+                'pf_applicable' => !empty($data['pf_applicable']) ? 1 : 0,
+                'esi_applicable' => !empty($data['esi_applicable']) ? 1 : 0,
+                'pt_applicable' => !empty($data['pt_applicable']) ? 1 : 0,
+                'lwf_applicable' => !empty($data['lwf_applicable']) ? 1 : 0,
             ];
         }
 
@@ -426,7 +430,7 @@ class Employee {
             $this->db->beginTransaction();
             
             // Update employee
-            $this->db->update('employees', $dbData, 'id = :id', ['id' => $id]);
+            $this->db->update('employees', $dbData, SQL_WHERE_ID, ['id' => $id]);
             
             // Update salary structure if provided and table exists
             if (!empty($salaryData)) {
@@ -459,7 +463,7 @@ class Employee {
             'status' => STATUS_REMOVED,
             'date_of_leaving' => date(DATE_FORMAT_DB),
             'updated_at' => date(DATETIME_FORMAT_DB)
-        ], 'id = :id', ['id' => $id]);
+        ], SQL_WHERE_ID, ['id' => $id]);
 
         return ['success' => true, 'message' => MSG_RECORD_DELETED];
     }
@@ -471,7 +475,7 @@ class Employee {
             'approved_at' => date(DATETIME_FORMAT_DB),
             'approved_by' => $approvedBy,
             'updated_at' => date(DATETIME_FORMAT_DB)
-        ], 'id = :id', ['id' => $id]);
+        ], SQL_WHERE_ID, ['id' => $id]);
     }
 
     // Generate UUID v4
