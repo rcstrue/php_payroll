@@ -5,9 +5,30 @@
 
 $pageTitle = 'Upload Attendance';
 
-// Get units with client names
-$stmt = $db->query("SELECT u.id, u.name as unit_name, c.name as client_name FROM units u LEFT JOIN clients c ON u.client_id = c.id WHERE u.is_active = 1 ORDER BY c.name, u.name");
-$units = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// Get clients for dropdown
+$clients = [];
+try {
+    $stmt = $db->query("SELECT id, name FROM clients WHERE is_active = 1 ORDER BY name");
+    $clients = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    // Table doesn't exist
+}
+
+// Get selected filters
+$selectedClient = isset($_GET['client_id']) ? (int)$_GET['client_id'] : null;
+$selectedUnit = isset($_GET['unit_id']) ? (int)$_GET['unit_id'] : null;
+
+// Get units based on selected client
+$units = [];
+if ($selectedClient) {
+    try {
+        $stmt = $db->prepare("SELECT id, name FROM units WHERE client_id = ? AND is_active = 1 ORDER BY name");
+        $stmt->execute([$selectedClient]);
+        $units = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Exception $e) {
+        // Table doesn't exist
+    }
+}
 
 // Handle upload
 $uploadResult = null;
@@ -55,6 +76,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['attendance_file'])) 
     } else {
         setFlash('error', 'File upload error');
     }
+    
+    // Redirect to preserve client selection
+    redirect("index.php?page=attendance/upload&client_id=" . (int)$_POST['client_id'] . "&unit_id=$unitId");
 }
 ?>
 
@@ -65,25 +89,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['attendance_file'])) 
                 <h5 class="card-title mb-0"><i class="bi bi-cloud-upload me-2"></i>Upload Attendance</h5>
             </div>
             <div class="card-body">
-                <form method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
+                <form method="POST" enctype="multipart/form-data" class="needs-validation" novalidate id="uploadForm">
                     <div class="row g-3">
-                        <div class="col-md-4">
-                            <label class="form-label required">Unit</label>
-                            <select class="form-select select2" name="unit_id" required>
-                                <option value="">Select Unit</option>
-                                <?php foreach ($units as $u): ?>
-                                <option value="<?php echo $u['id']; ?>">
-                                    <?php echo sanitize($u['client_name'] . ' - ' . $u['unit_name']); ?>
+                        <div class="col-md-3">
+                            <label class="form-label required">Client</label>
+                            <select class="form-select" name="client_id" id="clientSelect" required onchange="loadUnits()">
+                                <option value="">Select Client</option>
+                                <?php foreach ($clients as $c): ?>
+                                <option value="<?php echo $c['id']; ?>" <?php echo $selectedClient == $c['id'] ? 'selected' : ''; ?>>
+                                    <?php echo sanitize($c['name']); ?>
                                 </option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <div class="col-md-4">
+                        
+                        <div class="col-md-3">
+                            <label class="form-label required">Unit</label>
+                            <select class="form-select" name="unit_id" id="unitSelect" required>
+                                <option value="">Select Unit</option>
+                                <?php foreach ($units as $u): ?>
+                                <option value="<?php echo $u['id']; ?>" <?php echo $selectedUnit == $u['id'] ? 'selected' : ''; ?>>
+                                    <?php echo sanitize($u['name']); ?>
+                                </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-3">
                             <label class="form-label required">Month</label>
                             <select class="form-select" name="month" required>
                                 <?php 
+                                $prevMonth = date('n') - 1;
+                                if ($prevMonth < 1) $prevMonth = 12;
                                 for ($m = 1; $m <= 12; $m++):
-                                    $selected = $m == date('n') ? 'selected' : '';
+                                    $selected = $m == $prevMonth ? 'selected' : '';
                                 ?>
                                 <option value="<?php echo $m; ?>" <?php echo $selected; ?>>
                                     <?php echo date('F', mktime(0, 0, 0, $m, 1)); ?>
@@ -91,7 +130,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['attendance_file'])) 
                                 <?php endfor; ?>
                             </select>
                         </div>
-                        <div class="col-md-4">
+                        
+                        <div class="col-md-3">
                             <label class="form-label required">Year</label>
                             <select class="form-select" name="year" required>
                                 <?php 
@@ -193,6 +233,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['attendance_file'])) 
                     <table class="table table-hover mb-0">
                         <thead>
                             <tr>
+                                <th>Client</th>
                                 <th>Unit</th>
                                 <th>Month/Year</th>
                                 <th>Records</th>
@@ -202,37 +243,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['attendance_file'])) 
                         </thead>
                         <tbody>
                             <?php
-                            $stmt = $db->query(
-                                "SELECT DISTINCT unit_id, COUNT(*) as record_count, 
-                                        MONTH(attendance_date) as month, YEAR(attendance_date) as year,
-                                        uploaded_by, MAX(created_at) as upload_date
-                                 FROM attendance 
-                                 WHERE source = 'Excel Upload'
-                                 GROUP BY unit_id, MONTH(attendance_date), YEAR(attendance_date)
-                                 ORDER BY upload_date DESC LIMIT 10"
-                            );
-                            $recentUploads = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                            
-                            if (empty($recentUploads)):
+                            try {
+                                $stmt = $db->query(
+                                    "SELECT DISTINCT a.unit_id, COUNT(*) as record_count, 
+                                            MONTH(a.attendance_date) as month, YEAR(a.attendance_date) as year,
+                                            a.uploaded_by, MAX(a.created_at) as upload_date,
+                                            u.name as unit_name, c.name as client_name
+                                     FROM attendance a
+                                     LEFT JOIN units u ON a.unit_id = u.id
+                                     LEFT JOIN clients c ON u.client_id = c.id
+                                     WHERE a.source = 'Excel Upload'
+                                     GROUP BY a.unit_id, MONTH(a.attendance_date), YEAR(a.attendance_date)
+                                     ORDER BY upload_date DESC LIMIT 10"
+                                );
+                                $recentUploads = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                                
+                                if (empty($recentUploads)):
                             ?>
                                 <tr>
-                                    <td colspan="5" class="text-center py-4 text-muted">No uploads yet</td>
+                                    <td colspan="6" class="text-center py-4 text-muted">No uploads yet</td>
                                 </tr>
                             <?php else: ?>
-                            <?php foreach ($recentUploads as $upload): 
-                                $stmt2 = $db->prepare("SELECT name as unit_name FROM units WHERE id = ?");
-                                $stmt2->execute([$upload['unit_id']]);
-                                $unitName = $stmt2->fetchColumn();
-                            ?>
+                            <?php foreach ($recentUploads as $upload): ?>
                             <tr>
-                                <td><?php echo sanitize($unitName); ?></td>
+                                <td><?php echo sanitize($upload['client_name'] ?? '-'); ?></td>
+                                <td><?php echo sanitize($upload['unit_name'] ?? '-'); ?></td>
                                 <td><?php echo date('F Y', mktime(0, 0, 0, $upload['month'], 1, $upload['year'])); ?></td>
                                 <td><?php echo number_format($upload['record_count']); ?></td>
-                                <td><?php echo $upload['uploaded_by'] ?? 'System'; ?></td>
+                                <td><?php echo sanitize($upload['uploaded_by'] ?? 'System'); ?></td>
                                 <td><?php echo formatDate($upload['upload_date'], 'd-m-Y H:i'); ?></td>
                             </tr>
                             <?php endforeach; ?>
                             <?php endif; ?>
+                            <?php } catch (Exception $e) { ?>
+                                <tr>
+                                    <td colspan="6" class="text-center py-4 text-muted">No upload history available</td>
+                                </tr>
+                            <?php } ?>
                         </tbody>
                     </table>
                 </div>
@@ -240,3 +287,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['attendance_file'])) 
         </div>
     </div>
 </div>
+
+<script>
+function loadUnits() {
+    const clientId = document.getElementById('clientSelect').value;
+    const unitSelect = document.getElementById('unitSelect');
+    
+    unitSelect.innerHTML = '<option value="">Loading...</option>';
+    
+    if (!clientId) {
+        unitSelect.innerHTML = '<option value="">Select Unit</option>';
+        return;
+    }
+    
+    fetch('index.php?page=api/units&client_id=' + clientId)
+        .then(response => response.json())
+        .then(data => {
+            unitSelect.innerHTML = '<option value="">Select Unit</option>';
+            if (data.units) {
+                data.units.forEach(unit => {
+                    const option = document.createElement('option');
+                    option.value = unit.id;
+                    option.textContent = unit.name;
+                    unitSelect.appendChild(option);
+                });
+            }
+        })
+        .catch(() => {
+            unitSelect.innerHTML = '<option value="">Select Unit</option>';
+        });
+}
+
+// Load units on page load if client is selected
+document.addEventListener('DOMContentLoaded', function() {
+    const clientId = document.getElementById('clientSelect').value;
+    if (clientId) {
+        loadUnits();
+    }
+});
+</script>
