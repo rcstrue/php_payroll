@@ -1,7 +1,7 @@
 <?php
 /**
  * RCS HRMS Pro - Payroll Processing Page
- * Version: 3.0.0 - Redesigned with month selection tabs, removed charts
+ * Version: 3.1.0 - Fixed all errors, proper error handling
  * 
  * IMPORTANT NOTES FOR DEVELOPERS:
  * =================================
@@ -51,8 +51,8 @@ if ($filterClientId) {
 
 // Handle create period
 if (isset($_POST['create_period'])) {
-    $month = (int)$_POST['month'];
-    $year = (int)$_POST['year'];
+    $month = (int)($_POST['month'] ?? date('n'));
+    $year = (int)($_POST['year'] ?? date('Y'));
     
     $result = $payroll->createPeriod($month, $year);
     if (isset($result['success']) && $result['success']) {
@@ -80,7 +80,7 @@ if (isset($_POST['process_payroll']) && isset($_POST['period_id'])) {
     if (isset($result['success']) && $result['success']) {
         $msg = "Payroll processed for {$result['processed']} employees!";
         if (!empty($result['exceptions'])) {
-            $msg .= " ({$result['exceptions']} exceptions found)";
+            $msg .= " (" . count($result['exceptions']) . " exceptions found)";
         }
         setFlash('success', $msg);
     } else {
@@ -210,7 +210,7 @@ $payrollData = [];
 $totals = null;
 $exceptions = [];
 
-if (isset($_GET['period_id'])) {
+if (isset($_GET['period_id']) && !empty($_GET['period_id'])) {
     $stmt = $db->prepare("SELECT * FROM payroll_periods WHERE id = ?");
     $stmt->execute([(int)$_GET['period_id']]);
     $selectedPeriod = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -556,36 +556,36 @@ $allUnitsJson = json_encode($allUnits);
             </div>
             
             <!-- Summary Cards -->
-            <?php if ($totals && $totals['employee_count'] > 0): ?>
+            <?php if ($totals && ($totals['employee_count'] ?? 0) > 0): ?>
             <div class="card-body border-bottom py-2">
                 <div class="row text-center g-2">
                     <div class="col">
                         <div class="small text-muted">Employees</div>
-                        <div class="h5 mb-0"><?php echo number_format($totals['employee_count']); ?></div>
+                        <div class="h5 mb-0"><?php echo number_format($totals['employee_count'] ?? 0); ?></div>
                     </div>
                     <div class="col">
                         <div class="small text-muted">Gross</div>
-                        <div class="h5 mb-0 text-primary"><?php echo formatCurrency($totals['total_gross']); ?></div>
+                        <div class="h5 mb-0 text-primary"><?php echo formatCurrency($totals['total_gross'] ?? 0); ?></div>
                     </div>
                     <div class="col">
                         <div class="small text-muted">Deductions</div>
-                        <div class="h5 mb-0 text-danger"><?php echo formatCurrency($totals['total_deductions']); ?></div>
+                        <div class="h5 mb-0 text-danger"><?php echo formatCurrency($totals['total_deductions'] ?? 0); ?></div>
                     </div>
                     <div class="col">
                         <div class="small text-muted">Net Pay</div>
-                        <div class="h5 mb-0 text-success"><?php echo formatCurrency($totals['total_net_pay']); ?></div>
+                        <div class="h5 mb-0 text-success"><?php echo formatCurrency($totals['total_net_pay'] ?? 0); ?></div>
                     </div>
                     <div class="col">
                         <div class="small text-muted">CTC</div>
-                        <div class="h5 mb-0"><?php echo formatCurrency($totals['total_ctc']); ?></div>
+                        <div class="h5 mb-0"><?php echo formatCurrency($totals['total_ctc'] ?? 0); ?></div>
                     </div>
-                    <?php if ($totals['held_count'] > 0): ?>
+                    <?php if (($totals['held_count'] ?? 0) > 0): ?>
                     <div class="col">
                         <div class="small text-muted">Held</div>
                         <div class="h5 mb-0 text-warning"><?php echo $totals['held_count']; ?></div>
                     </div>
                     <?php endif; ?>
-                    <?php if ($totals['dirty_count'] > 0): ?>
+                    <?php if (($totals['dirty_count'] ?? 0) > 0): ?>
                     <div class="col">
                         <div class="small text-muted">Needs Recalc</div>
                         <div class="h5 mb-0 text-info"><?php echo $totals['dirty_count']; ?></div>
@@ -754,23 +754,26 @@ $allUnitsJson = json_encode($allUnits);
                                     </td>
                                     <?php endif; ?>
                                     <?php if (in_array('employee_code', $selectedColumns)): ?>
-                                    <td><code><?php echo sanitize($row['employee_code'] ?? $row['employee_id']); ?></code></td>
+                                    <td><?php echo sanitize($row['employee_code']); ?></td>
                                     <?php endif; ?>
                                     <?php if (in_array('full_name', $selectedColumns)): ?>
-                                    <td><?php echo sanitize($row['full_name'] ?? '-'); ?></td>
+                                    <td>
+                                        <?php echo sanitize($row['full_name']); ?>
+                                        <?php if ($row['salary_hold'] ?? 0): ?>
+                                        <span class="badge bg-warning text-dark ms-1">Hold</span>
+                                        <?php endif; ?>
+                                    </td>
                                     <?php endif; ?>
                                     <?php if (in_array('client_unit', $selectedColumns)): ?>
                                     <td>
-                                        <small>
-                                            <?php echo sanitize($row['client_name'] ?? '-'); ?>
-                                            <?php if (!empty($row['unit_name'])): ?>
-                                            <br><span class="text-muted"><?php echo sanitize($row['unit_name']); ?></span>
-                                            <?php endif; ?>
-                                        </small>
+                                        <small><?php echo sanitize($row['client_name'] ?? ''); ?></small>
+                                        <?php if ($row['unit_name']): ?>
+                                        <small class="text-muted">/ <?php echo sanitize($row['unit_name']); ?></small>
+                                        <?php endif; ?>
                                     </td>
                                     <?php endif; ?>
                                     <?php if (in_array('paid_days', $selectedColumns)): ?>
-                                    <td class="text-center"><?php echo $row['paid_days'] ?? 30; ?></td>
+                                    <td class="text-center"><?php echo $row['paid_days'] ?? 0; ?></td>
                                     <?php endif; ?>
                                     <?php if (in_array('basic', $selectedColumns)): ?>
                                     <td class="text-end"><?php echo formatCurrency($row['basic'] ?? 0); ?></td>
@@ -782,7 +785,7 @@ $allUnitsJson = json_encode($allUnits);
                                     <td class="text-end"><?php echo formatCurrency($row['hra'] ?? 0); ?></td>
                                     <?php endif; ?>
                                     <?php if (in_array('gross', $selectedColumns)): ?>
-                                    <td class="text-end"><strong><?php echo formatCurrency($row['gross'] ?? 0); ?></strong></td>
+                                    <td class="text-end"><strong><?php echo formatCurrency($row['gross_earnings'] ?? 0); ?></strong></td>
                                     <?php endif; ?>
                                     <?php if (in_array('pf_emp', $selectedColumns)): ?>
                                     <td class="text-end"><?php echo formatCurrency($row['pf_employee'] ?? 0); ?></td>
@@ -794,7 +797,7 @@ $allUnitsJson = json_encode($allUnits);
                                     <td class="text-end"><?php echo formatCurrency($row['professional_tax'] ?? 0); ?></td>
                                     <?php endif; ?>
                                     <?php if (in_array('advance', $selectedColumns)): ?>
-                                    <td class="text-end"><?php echo formatCurrency($row['advance_deduction'] ?? 0); ?></td>
+                                    <td class="text-end"><?php echo formatCurrency($row['salary_advance'] ?? 0); ?></td>
                                     <?php endif; ?>
                                     <?php if (in_array('deductions', $selectedColumns)): ?>
                                     <td class="text-end text-danger"><?php echo formatCurrency($row['total_deductions'] ?? 0); ?></td>
@@ -807,21 +810,22 @@ $allUnitsJson = json_encode($allUnits);
                                     <?php endif; ?>
                                     <?php if (in_array('status', $selectedColumns)): ?>
                                     <td>
-                                        <?php if ($row['salary_hold'] ?? 0): ?>
-                                        <span class="badge bg-warning">Hold</span>
-                                        <?php else: ?>
                                         <span class="badge bg-<?php 
-                                            echo $row['status'] === 'Paid' ? 'success' : 
-                                                ($row['status'] === 'Approved' ? 'info' : 'secondary'); 
-                                        ?>"><?php echo sanitize($row['status'] ?? 'Processed'); ?></span>
+                                            echo ($row['status'] ?? '') === 'Processed' ? 'info' : 
+                                                (($row['status'] ?? '') === 'Hold' ? 'warning text-dark' : 
+                                                (($row['status'] ?? '') === 'Approved' ? 'success' : 
+                                                (($row['status'] ?? '') === 'Paid' ? 'primary' : 'secondary')));
+                                        ?>"><?php echo sanitize($row['status'] ?? 'Draft'); ?></span>
+                                        <?php if ($row['payroll_dirty'] ?? 0): ?>
+                                        <span class="badge bg-info" title="Needs recalculation">!</span>
                                         <?php endif; ?>
                                     </td>
                                     <?php endif; ?>
                                     <td>
-                                        <button type="button" class="btn btn-sm btn-outline-primary" 
-                                                onclick="viewPayrollDetail('<?php echo $row['employee_id']; ?>', <?php echo $selectedPeriod['id']; ?>)">
+                                        <a href="index.php?page=payroll/view&id=<?php echo $row['id']; ?>" 
+                                           class="btn btn-sm btn-outline-primary" title="View Details">
                                             <i class="bi bi-eye"></i>
-                                        </button>
+                                        </a>
                                     </td>
                                 </tr>
                                 <?php endforeach; ?>
@@ -848,11 +852,11 @@ $allUnitsJson = json_encode($allUnits);
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <p>Select filters for payroll processing:</p>
+                    <p>Process payroll for <strong><?php echo sanitize($selectedPeriod['period_name'] ?? ''); ?></strong>?</p>
                     
                     <div class="mb-3">
-                        <label class="form-label">Client</label>
-                        <select name="process_client_id" id="processClient" class="form-select" onchange="filterProcessUnits()">
+                        <label class="form-label">Client (Optional)</label>
+                        <select name="process_client_id" class="form-select" id="processClient">
                             <option value="">All Clients</option>
                             <?php foreach ($clients as $c): ?>
                             <option value="<?php echo $c['id']; ?>"><?php echo sanitize($c['name']); ?></option>
@@ -861,20 +865,10 @@ $allUnitsJson = json_encode($allUnits);
                     </div>
                     
                     <div class="mb-3">
-                        <label class="form-label">Unit</label>
-                        <select name="process_unit_id" id="processUnit" class="form-select">
+                        <label class="form-label">Unit (Optional)</label>
+                        <select name="process_unit_id" class="form-select" id="processUnit">
                             <option value="">All Units</option>
-                            <?php foreach ($allUnits as $u): ?>
-                            <option value="<?php echo $u['id']; ?>" data-client-id="<?php echo $u['client_id']; ?>">
-                                <?php echo sanitize($u['name']); ?>
-                            </option>
-                            <?php endforeach; ?>
                         </select>
-                    </div>
-                    
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle me-2"></i>
-                        Only employees with active salary structures will be processed.
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -892,23 +886,24 @@ $allUnitsJson = json_encode($allUnits);
 <div class="modal fade" id="holdModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form method="POST">
+            <form method="POST" id="holdForm">
                 <input type="hidden" name="period_id" value="<?php echo $selectedPeriod['id'] ?? ''; ?>">
                 <div class="modal-header">
                     <h5 class="modal-title">Hold Salary</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <input type="hidden" name="hold_employees" id="holdEmployees">
                     <div class="mb-3">
                         <label class="form-label">Reason for Hold</label>
-                        <textarea name="hold_reason" class="form-control" rows="2" placeholder="Enter reason..."></textarea>
+                        <textarea name="hold_reason" class="form-control" rows="2" required></textarea>
                     </div>
-                    <p class="text-muted small">Selected employees will be excluded from payment until released.</p>
+                    <div id="holdEmployeesList"></div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" name="hold_salary" class="btn btn-warning">Hold Salary</button>
+                    <button type="submit" name="hold_salary" class="btn btn-warning">
+                        <i class="bi bi-pause-circle me-1"></i>Hold Salary
+                    </button>
                 </div>
             </form>
         </div>
@@ -919,19 +914,21 @@ $allUnitsJson = json_encode($allUnits);
 <div class="modal fade" id="releaseModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form method="POST">
+            <form method="POST" id="releaseForm">
                 <input type="hidden" name="period_id" value="<?php echo $selectedPeriod['id'] ?? ''; ?>">
                 <div class="modal-header">
                     <h5 class="modal-title">Release Salary</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <input type="hidden" name="release_employees" id="releaseEmployees">
-                    <p class="text-muted">Selected employees will be included in the next payment run.</p>
+                    <p>Release held salary for selected employees?</p>
+                    <div id="releaseEmployeesList"></div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" name="release_salary" class="btn btn-success">Release Salary</button>
+                    <button type="submit" name="release_salary" class="btn btn-success">
+                        <i class="bi bi-play-circle me-1"></i>Release Salary
+                    </button>
                 </div>
             </form>
         </div>
@@ -942,169 +939,145 @@ $allUnitsJson = json_encode($allUnits);
 <div class="modal fade" id="recalculateModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form method="POST">
+            <form method="POST" id="recalculateForm">
                 <input type="hidden" name="period_id" value="<?php echo $selectedPeriod['id'] ?? ''; ?>">
                 <div class="modal-header">
                     <h5 class="modal-title">Recalculate Payroll</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <input type="hidden" name="employee_codes" id="recalculateEmployees">
                     <p>Recalculate payroll for selected employees?</p>
-                    <p class="text-muted small">This will re-fetch attendance and salary data.</p>
+                    <div id="recalculateEmployeesList"></div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" name="recalculate_payroll" class="btn btn-info">Recalculate</button>
+                    <button type="submit" name="recalculate_payroll" class="btn btn-info">
+                        <i class="bi bi-arrow-repeat me-1"></i>Recalculate
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
-<!-- Detail Modal -->
-<div class="modal fade" id="detailModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Payroll Details</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body" id="detailContent">
-                <div class="text-center py-4">
-                    <div class="spinner-border text-primary" role="status"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
 <script>
-const allUnits = <?php echo json_encode($allUnits); ?>;
+var allUnits = <?php echo $allUnitsJson; ?>;
 
-// Filter units dropdown based on selected client
-function filterUnitsDropdown() {
-    const clientId = document.getElementById('filterClient').value;
-    const unitSelect = document.getElementById('filterUnit');
-    const currentUnit = unitSelect.value;
+$(document).ready(function() {
+    // Select all checkbox
+    $('#selectAll').on('change', function() {
+        $('.row-checkbox').prop('checked', this.checked);
+        updateSelectedCount();
+    });
     
-    unitSelect.innerHTML = '<option value="">All Units</option>';
+    // Row checkbox change
+    $(document).on('change', '.row-checkbox', function() {
+        updateSelectedCount();
+    });
     
-    allUnits.forEach(function(unit) {
-        if (!clientId || unit.client_id == clientId) {
-            const option = document.createElement('option');
-            option.value = unit.id;
-            option.textContent = unit.name;
-            if (unit.id == currentUnit) {
-                option.selected = true;
+    // Column visibility toggle
+    $('.column-toggle').on('change', function() {
+        var columns = [];
+        $('.column-toggle:checked').each(function() {
+            columns.push($(this).data('column'));
+        });
+        document.cookie = 'payroll_columns=' + JSON.stringify(columns) + ';path=/;max-age=31536000';
+        location.reload();
+    });
+    
+    // Process client filter
+    $('#processClient').on('change', function() {
+        var clientId = $(this).val();
+        var $unitSelect = $('#processUnit');
+        $unitSelect.find('option:not(:first)').remove();
+        
+        allUnits.forEach(function(unit) {
+            if (!clientId || unit.client_id == clientId) {
+                $unitSelect.append('<option value="' + unit.id + '">' + unit.name + '</option>');
             }
-            unitSelect.appendChild(option);
-        }
+        });
     });
-}
-
-// Filter units in process modal
-function filterProcessUnits() {
-    const clientId = document.getElementById('processClient').value;
-    const unitSelect = document.getElementById('processUnit');
     
-    unitSelect.innerHTML = '<option value="">All Units</option>';
-    
-    allUnits.forEach(function(unit) {
-        if (!clientId || unit.client_id == clientId) {
-            const option = document.createElement('option');
-            option.value = unit.id;
-            option.textContent = unit.name;
-            unitSelect.appendChild(option);
-        }
-    });
-}
-
-// Select all checkbox
-document.getElementById('selectAll')?.addEventListener('change', function() {
-    const checkboxes = document.querySelectorAll('.row-checkbox');
-    checkboxes.forEach(cb => cb.checked = this.checked);
-    updateSelectedCount();
-});
-
-// Update selected count
-document.querySelectorAll('.row-checkbox').forEach(cb => {
-    cb.addEventListener('change', updateSelectedCount);
+    // Filter units dropdown
+    if ($('#filterClient').val()) {
+        filterUnitsDropdown();
+    }
 });
 
 function updateSelectedCount() {
-    const count = document.querySelectorAll('.row-checkbox:checked').length;
-    document.getElementById('selectedCount').textContent = count;
+    var count = $('.row-checkbox:checked').length;
+    $('#selectedCount').text(count);
 }
 
-// Modal functions
+function filterUnitsDropdown() {
+    var clientId = $('#filterClient').val();
+    var $unitSelect = $('#filterUnit');
+    var currentVal = $unitSelect.val();
+    
+    $unitSelect.find('option:not(:first)').remove();
+    
+    allUnits.forEach(function(unit) {
+        if (!clientId || unit.client_id == clientId) {
+            var selected = unit.id == currentVal ? ' selected' : '';
+            $unitSelect.append('<option value="' + unit.id + '"' + selected + '>' + unit.name + '</option>');
+        }
+    });
+}
+
 function openHoldModal() {
-    const selected = getSelectedEmployees();
+    var selected = [];
+    $('.row-checkbox:checked').each(function() {
+        selected.push($(this).val());
+    });
+    
     if (selected.length === 0) {
-        alert('Please select at least one employee');
+        alert('Please select at least one employee.');
         return;
     }
-    document.getElementById('holdEmployees').value = JSON.stringify(selected);
-    new bootstrap.Modal(document.getElementById('holdModal')).show();
+    
+    var html = '<input type="hidden" name="hold_employees[]" value="' + selected.join(',') + '">';
+    html += '<p class="text-muted">' + selected.length + ' employee(s) selected</p>';
+    $('#holdEmployeesList').html(html);
+    
+    var modal = new bootstrap.Modal(document.getElementById('holdModal'));
+    modal.show();
 }
 
 function openReleaseModal() {
-    const selected = getSelectedEmployees();
+    var selected = [];
+    $('.row-checkbox:checked').each(function() {
+        selected.push($(this).val());
+    });
+    
     if (selected.length === 0) {
-        alert('Please select at least one employee');
+        alert('Please select at least one employee.');
         return;
     }
-    document.getElementById('releaseEmployees').value = JSON.stringify(selected);
-    new bootstrap.Modal(document.getElementById('releaseModal')).show();
+    
+    var html = '<input type="hidden" name="release_employees[]" value="' + selected.join(',') + '">';
+    html += '<p class="text-muted">' + selected.length + ' employee(s) selected</p>';
+    $('#releaseEmployeesList').html(html);
+    
+    var modal = new bootstrap.Modal(document.getElementById('releaseModal'));
+    modal.show();
 }
 
 function openRecalculateModal() {
-    const selected = getSelectedEmployees();
-    document.getElementById('recalculateEmployees').value = JSON.stringify(selected);
-    new bootstrap.Modal(document.getElementById('recalculateModal')).show();
-}
-
-function getSelectedEmployees() {
-    return Array.from(document.querySelectorAll('.row-checkbox:checked'))
-        .map(cb => cb.value);
-}
-
-// View payroll detail
-function viewPayrollDetail(employeeId, periodId) {
-    const modal = new bootstrap.Modal(document.getElementById('detailModal'));
-    document.getElementById('detailContent').innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
-    modal.show();
-    
-    fetch('index.php?page=payroll/view&action=detail&employee_id=' + employeeId + '&period_id=' + periodId)
-        .then(response => response.text())
-        .then(html => {
-            document.getElementById('detailContent').innerHTML = html;
-        })
-        .catch(() => {
-            document.getElementById('detailContent').innerHTML = '<div class="alert alert-danger">Failed to load details</div>';
-        });
-}
-
-// Column visibility toggle
-document.querySelectorAll('.column-toggle').forEach(checkbox => {
-    checkbox.addEventListener('change', function() {
-        const column = this.dataset.column;
-        const table = document.getElementById('payrollTable');
-        const index = this.closest('th') ? this.closest('th').cellIndex : -1;
-        
-        // Toggle column visibility
-        table.querySelectorAll('th:nth-child(' + (index + 1) + '), td:nth-child(' + (index + 1) + ')')
-            .forEach(cell => cell.style.display = this.checked ? '' : 'none');
-        
-        // Save to cookie
-        const visible = Array.from(document.querySelectorAll('.column-toggle:checked'))
-            .map(cb => cb.dataset.column);
-        document.cookie = 'payroll_columns=' + JSON.stringify(visible) + ';path=/;max-age=31536000';
+    var selected = [];
+    $('.row-checkbox:checked').each(function() {
+        selected.push($(this).val());
     });
-});
-
-// Initialize on load
-document.addEventListener('DOMContentLoaded', function() {
-    filterUnitsDropdown();
-});
+    
+    if (selected.length === 0) {
+        alert('Please select at least one employee.');
+        return;
+    }
+    
+    var html = '<input type="hidden" name="employee_codes[]" value="' + selected.join(',') + '">';
+    html += '<p class="text-muted">' + selected.length + ' employee(s) selected</p>';
+    $('#recalculateEmployeesList').html(html);
+    
+    var modal = new bootstrap.Modal(document.getElementById('recalculateModal'));
+    modal.show();
+}
 </script>
