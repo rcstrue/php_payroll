@@ -73,12 +73,12 @@ $countStmt->execute($params);
 $total = $countStmt->fetch(PDO::FETCH_ASSOC)['total'];
 $totalPages = ceil($total / $perPage);
 
-// Get documents
+// Get documents - use id for ordering since uploaded_at may not exist
 $docStmt = $db->prepare("SELECT d.*, e.full_name, e.employee_code 
                           FROM employee_documents d 
                           JOIN employees e ON d.employee_id = e.id 
                           $where 
-                          ORDER BY d.uploaded_at DESC 
+                          ORDER BY d.id DESC 
                           LIMIT $perPage OFFSET $offset");
 $docStmt->execute($params);
 $documents = $docStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -207,7 +207,7 @@ $documentTypes = [
                                     else echo round($size / 1048576, 1) . ' MB';
                                     ?>
                                 </td>
-                                <td><?php echo formatDate($doc['uploaded_at'], 'd M Y H:i'); ?></td>
+                                <td><?php echo formatDate($doc['created_at'] ?? '', 'd M Y H:i'); ?></td>
                                 <td class="text-center">
                                     <div class="btn-group btn-group-sm">
                                         <?php if (file_exists(APP_ROOT . '/' . $doc['file_path'])): ?>
