@@ -8,9 +8,28 @@
     
     <title><?php echo isset($pageTitle) ? $pageTitle . ' - ' : ''; ?>RCS HRMS Pro</title>
     
+    <?php
+    // Detect base path for subdirectory installations (e.g., /hrms/)
+    $basePath = '';
+    $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
+    // Find the base path by removing 'index.php' from the script name
+    if (strpos($scriptName, 'index.php') !== false) {
+        $basePath = dirname($scriptName);
+        // Normalize - remove trailing slash issues
+        $basePath = rtrim($basePath, '/\\');
+        if ($basePath === '/' || $basePath === '\\' || $basePath === '.') {
+            $basePath = '';
+        }
+    }
+    // Define a global constant for asset URLs
+    if (!defined('ASSET_URL')) {
+        define('ASSET_URL', $basePath);
+    }
+    ?>
+    
     <!-- Favicon -->
-    <link rel="icon" type="image/svg+xml" href="assets/images/favicon.svg">
-    <link rel="alternate icon" type="image/png" href="assets/images/logo.png">
+    <link rel="icon" type="image/svg+xml" href="<?php echo ASSET_URL; ?>/assets/images/favicon.svg">
+    <link rel="alternate icon" type="image/png" href="<?php echo ASSET_URL; ?>/assets/images/logo.png">
     
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -31,7 +50,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     
     <!-- Custom CSS -->
-    <link href="assets/css/style.css" rel="stylesheet">
+    <link href="<?php echo ASSET_URL; ?>/assets/css/style.css" rel="stylesheet">
     
     <?php if (isset($extraCSS)) {
         echo $extraCSS;
@@ -44,7 +63,7 @@
     <nav id="sidebar" class="sidebar">
         <div class="sidebar-header">
             <a href="index.php" class="sidebar-brand">
-                <img src="assets/images/logo.png" alt="RCS HRMS" class="sidebar-logo">
+                <img src="<?php echo ASSET_URL; ?>/assets/images/logo.png" alt="RCS HRMS" class="sidebar-logo">
                 <span class="sidebar-brand-text">RCS HRMS Pro</span>
             </a>
             <button type="button" class="sidebar-close d-lg-none" id="sidebar-close">
