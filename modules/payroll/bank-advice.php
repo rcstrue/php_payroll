@@ -40,9 +40,10 @@ $sql = "SELECT
             e.employee_code,
             e.full_name,
             e.bank_name,
-            COALESCE(e.account_number, e.bank_account_number) as bank_account_number,
-            COALESCE(e.ifsc_code, e.bank_ifsc_code) as bank_ifsc_code,
-            p.net_salary,
+            e.account_number as bank_account_number,
+            e.ifsc_code as bank_ifsc_code,
+            p.net_pay as net_salary,
+            p.salary_hold,
             c.name as client_name,
             u.name as unit_name
         FROM payroll p
@@ -51,8 +52,10 @@ $sql = "SELECT
         LEFT JOIN units u ON e.unit_id = u.id
         JOIN payroll_periods pp ON p.payroll_period_id = pp.id
         WHERE {$where}
-        AND (e.account_number IS NOT NULL OR e.bank_account_number IS NOT NULL)
-        AND (e.account_number != '' OR e.bank_account_number != '')
+        AND p.salary_hold = 0
+        AND p.net_pay > 0
+        AND e.account_number IS NOT NULL
+        AND e.account_number != ''
         ORDER BY client_name, unit_name, e.full_name";
 
 $stmt = $db->prepare($sql);
@@ -233,7 +236,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'excel') {
                                 <td><?php echo sanitize($row['bank_name']); ?></td>
                                 <td><?php echo sanitize($row['bank_account_number']); ?></td>
                                 <td><?php echo sanitize($row['bank_ifsc_code']); ?></td>
-                                <td class="text-end"><strong><?php echo formatCurrency($row['net_salary']); ?></strong></td>
+                                <td class="text-end"><strong><?php echo formatCurrency($row['net_salary'] ?? 0); ?></strong></td>
                             </tr>
                             <?php endforeach; ?>
                             <tr class="table-dark">

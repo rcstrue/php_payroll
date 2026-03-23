@@ -12,14 +12,13 @@ $pageTitle = 'Payslips';
 
 // Get period
 $periodId = $_GET['period_id'] ?? null;
-$unitName = $_GET['unit_name'] ?? null;
+$unitId = $_GET['unit_id'] ?? null;
 
 // Get periods
 $periods = $payroll->getPeriods();
 
-// Get units - use JOIN with units table since employees has unit_id, not unit_name
-$stmt = $db->query("SELECT DISTINCT u.name as unit_name FROM employees e LEFT JOIN units u ON e.unit_id = u.id WHERE u.name IS NOT NULL AND u.name != '' ORDER BY u.name");
-$units = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// Get units with client info
+$units = $db->query("SELECT u.id, u.name as unit_name, c.name as client_name FROM units u LEFT JOIN clients c ON u.client_id = c.id WHERE u.is_active = 1 ORDER BY c.name, u.name")->fetchAll(PDO::FETCH_ASSOC);
 
 $payslips = [];
 $selectedPeriod = null;
@@ -30,8 +29,8 @@ if ($periodId) {
     $selectedPeriod = $stmt->fetch(PDO::FETCH_ASSOC);
     
     $filters = [];
-    if ($unitName) {
-        $filters['unit_name'] = $unitName;
+    if ($unitId) {
+        $filters['unit_id'] = $unitId;
     }
     
     $payslips = $payroll->getPayrollReport((int)$periodId, $filters);
@@ -69,11 +68,11 @@ if ($periodId) {
                     </div>
                     
                     <div class="col-md-4">
-                        <select class="form-select" name="unit_name">
+                        <select class="form-select" name="unit_id">
                             <option value="">All Units</option>
                             <?php foreach ($units as $u): ?>
-                            <option value="<?php echo sanitize($u['unit_name']); ?>" <?php echo $unitName == $u['unit_name'] ? 'selected' : ''; ?>>
-                                <?php echo sanitize($u['unit_name']); ?>
+                            <option value="<?php echo $u['id']; ?>" <?php echo $unitId == $u['id'] ? 'selected' : ''; ?>>
+                                <?php echo sanitize(($u['client_name'] ?? '') . ' - ' . $u['unit_name']); ?>
                             </option>
                             <?php endforeach; ?>
                         </select>

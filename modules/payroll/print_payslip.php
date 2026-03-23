@@ -19,7 +19,7 @@ if (!$payrollId) {
     die('Payslip ID required');
 }
 
-$data = $payrollObj->getPayslip($payrollId, null);
+$data = $payrollObj->getPayslipById($payrollId);
 
 if (!$data) {
     die('Payslip not found');
@@ -273,6 +273,12 @@ $periodData = $period->fetch(PDO::FETCH_ASSOC);
                     <span><?php echo formatCurrency($data['overtime_amount']); ?></span>
                 </div>
                 <?php endif; ?>
+                <?php if (($data['extra_days_amount'] ?? 0) > 0): ?>
+                <div class="payslip-row">
+                    <span>Extra Days Payment</span>
+                    <span><?php echo formatCurrency($data['extra_days_amount']); ?></span>
+                </div>
+                <?php endif; ?>
                 <div class="payslip-row total">
                     <span>GROSS EARNINGS</span>
                     <span><?php echo formatCurrency($data['gross_earnings'] ?? 0); ?></span>
@@ -298,6 +304,12 @@ $periodData = $period->fetch(PDO::FETCH_ASSOC);
                 <div class="payslip-row">
                     <span>Professional Tax</span>
                     <span><?php echo formatCurrency($data['professional_tax']); ?></span>
+                </div>
+                <?php endif; ?>
+                <?php if (($data['salary_advance'] ?? 0) > 0): ?>
+                <div class="payslip-row">
+                    <span>Salary Advance</span>
+                    <span><?php echo formatCurrency($data['salary_advance']); ?></span>
                 </div>
                 <?php endif; ?>
                 <div class="payslip-row total">

@@ -529,13 +529,36 @@ class Payroll {
                             NOW(), :user_id, NOW()
                         )
                         ON DUPLICATE KEY UPDATE
+                            total_days = VALUES(total_days),
                             paid_days = VALUES(paid_days),
+                            unpaid_days = VALUES(unpaid_days),
                             overtime_hours = VALUES(overtime_hours),
+                            basic = VALUES(basic),
+                            da = VALUES(da),
+                            hra = VALUES(hra),
+                            conveyance = VALUES(conveyance),
+                            medical_allowance = VALUES(medical_allowance),
+                            special_allowance = VALUES(special_allowance),
+                            other_allowance = VALUES(other_allowance),
                             overtime_amount = VALUES(overtime_amount),
                             extra_days_amount = VALUES(extra_days_amount),
                             gross_earnings = VALUES(gross_earnings),
-                            gross_salary = VALUES(gross_salary),
+                            pf_employee = VALUES(pf_employee),
+                            esi_employee = VALUES(esi_employee),
+                            professional_tax = VALUES(professional_tax),
+                            lwf_employee = VALUES(lwf_employee),
+                            salary_advance = VALUES(salary_advance),
                             total_deductions = VALUES(total_deductions),
+                            pf_employer = VALUES(pf_employer),
+                            eps_employer = VALUES(eps_employer),
+                            edlis_employer = VALUES(edlis_employer),
+                            epf_admin_charges = VALUES(epf_admin_charges),
+                            esi_employer = VALUES(esi_employer),
+                            lwf_employer = VALUES(lwf_employer),
+                            bonus_provision = VALUES(bonus_provision),
+                            gratuity_provision = VALUES(gratuity_provision),
+                            total_employer_contribution = VALUES(total_employer_contribution),
+                            gross_salary = VALUES(gross_salary),
                             net_pay = VALUES(net_pay),
                             ctc = VALUES(ctc),
                             payroll_dirty = 0,
@@ -999,7 +1022,7 @@ class Payroll {
     }
 
     /**
-     * Get payslip data
+     * Get payslip data by period and employee code
      */
     public function getPayslip($periodId, $employeeCode) {
         return $this->db->fetch(
@@ -1015,6 +1038,26 @@ class Payroll {
              LEFT JOIN units u ON e.unit_id = u.id
              WHERE p.payroll_period_id = :period_id AND p.employee_id = :emp_code",
             ['period_id' => $periodId, 'emp_code' => $employeeCode]
+        );
+    }
+
+    /**
+     * Get payslip data by payroll ID (primary key)
+     */
+    public function getPayslipById($payrollId) {
+        return $this->db->fetch(
+            "SELECT p.*, pp.period_name, pp.month, pp.year, pp.start_date, pp.end_date,
+                    e.full_name, e.employee_code, e.designation, e.department,
+                    c.name as client_name, u.name as unit_name, e.date_of_joining,
+                    e.uan_number, e.esic_number,
+                    e.bank_name, e.account_number, e.ifsc_code
+             FROM payroll p
+             JOIN payroll_periods pp ON p.payroll_period_id = pp.id
+             JOIN employees e ON p.employee_id = e.employee_code
+             LEFT JOIN clients c ON e.client_id = c.id
+             LEFT JOIN units u ON e.unit_id = u.id
+             WHERE p.id = :payroll_id",
+            ['payroll_id' => $payrollId]
         );
     }
 
