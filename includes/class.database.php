@@ -166,6 +166,17 @@ class Database {
         }
     }
     
+    // Execute SQL statement (for DDL like CREATE TABLE, etc.) - returns affected rows
+    public function exec($sql) {
+        try {
+            return $this->pdo->exec($sql);
+        } catch (PDOException $e) {
+            $this->error = $e->getMessage();
+            error_log('Exec Error: ' . $this->error . ' | SQL: ' . $sql);
+            throw $e;
+        }
+    }
+    
     // Get table columns
     public function getColumns($table) {
         $sql = "SHOW COLUMNS FROM `$table`";
