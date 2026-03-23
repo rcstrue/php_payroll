@@ -1,18 +1,14 @@
 <?php
 /**
  * RCS HRMS Pro - Payroll Processing Page
- * Version: 3.1.0 - Fixed all errors, proper error handling
+ * Version: 4.0.0 - Hybrid Payroll System
  * 
- * IMPORTANT NOTES FOR DEVELOPERS:
- * =================================
- * 1. Always use client_id and unit_id for filtering (NOT client_name/unit_name)
- * 2. Use JOINs to get client/unit names from their respective tables
- * 3. clients table uses 'name' column
- * 4. units table uses 'name' column
- * 5. AADHAAR NUMBER SHOULD NEVER BE HIDDEN IN INTERNAL VIEWS
- * 6. Status Flow: Draft -> Processed -> Approved -> Paid/Frozen
- * 7. Frozen status prevents all modifications
- * 8. salary_hold prevents individual from being paid
+ * Features:
+ * - Unit-wise batch processing
+ * - Excel-like grid interface
+ * - Independent unit finalization
+ * - Status tracking per unit
+ * - Bulk salary editing
  */
 
 $pageTitle = 'Process Payroll';
@@ -25,19 +21,15 @@ $currentMonth = date('n');
 $currentYear = date('Y');
 
 // Get filter values
-$filterClientId = $_GET['client_id'] ?? '';
-$filterUnitId = $_GET['unit_id'] ?? '';
-$filterStatus = $_GET['filter_status'] ?? '';
-$filterHold = $_GET['salary_hold'] ?? '';
-$searchTerm = $_GET['search'] ?? '';
-$filterMonth = $_GET['month'] ?? $currentMonth;
-$filterYear = $_GET['year'] ?? $currentYear;
+$filterClientId = (int)($_GET['client_id'] ?? 0);
+$filterUnitId = (int)($_GET['unit_id'] ?? 0);
+$searchTerm = sanitize($_GET['search'] ?? '');
 
-// Get clients and units for filters
-$clients = $db->query("SELECT id, name FROM clients WHERE is_active = 1 ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
-$allUnits = $db->query("SELECT id, name, client_id FROM units WHERE is_active = 1 ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+// Get clients and units
+$clients = $db->fetchAll("SELECT id, name FROM clients WHERE is_active = 1 ORDER BY name");
+$allUnits = $db->fetchAll("SELECT id, name, client_id FROM units WHERE is_active = 1 ORDER BY name");
 
-// Filter units by selected client for dropdown
+// Filter units by client
 $units = [];
 if ($filterClientId) {
     foreach ($allUnits as $u) {
@@ -51,11 +43,11 @@ if ($filterClientId) {
 
 // Handle create period
 if (isset($_POST['create_period'])) {
-    $month = (int)($_POST['month'] ?? date('n'));
-    $year = (int)($_POST['year'] ?? date('Y'));
+    $month = (int)($_POST['month'] ?? $currentMonth);
+    $year = (int)($_POST['year'] ?? $currentYear);
     
     $result = $payroll->createPeriod($month, $year);
-    if (isset($result['success']) && $result['success']) {
+    if (!empty($result['success'])) {
         setFlash('success', 'Payroll period created successfully!');
         redirect('index.php?page=payroll/process&period_id=' . $result['period_id']);
     } else {
@@ -63,98 +55,251 @@ if (isset($_POST['create_period'])) {
     }
 }
 
-// Handle process payroll
-if (isset($_POST['process_payroll']) && isset($_POST['period_id'])) {
-    $periodId = (int)$_POST['period_id'];
+// Get selected period
+$selectedPeriod = null;
+$unitStatuses = [];
+$payrollData = [];
+$totals = null;
+
+if (isset($_GET['period_id']) && !empty($_GET['period_id'])) {
+    $periodId = (int)$_GET['period_id'];
     
-    $filters = [];
-    if (!empty($_POST['process_client_id'])) {
-        $filters['client_id'] = (int)$_POST['process_client_id'];
-    }
-    if (!empty($_POST['process_unit_id'])) {
-        $filters['unit_id'] = (int)$_POST['process_unit_id'];
-    }
+    $stmt = $db->prepare("SELECT * FROM payroll_periods WHERE id = ?");
+    $stmt->execute([$periodId]);
+    $selectedPeriod = $stmt->fetch(PDO::FETCH_ASSOC);
     
-    $result = $payroll->processPayroll($periodId, $filters);
-    
-    if (isset($result['success']) && $result['success']) {
-        $msg = "Payroll processed for {$result['processed']} employees!";
-        if (!empty($result['exceptions'])) {
-            $msg .= " (" . count($result['exceptions']) . " exceptions found)";
+    if ($selectedPeriod) {
+        // Get unit-wise status
+        $unitStatuses = $db->fetchAll(
+            "SELECT pus.*, c.name as client_name, u.name as unit_name
+             FROM payroll_unit_status pus
+             LEFT JOIN clients c ON pus.client_id = c.id
+             JOIN units u ON pus.unit_id = u.id
+             WHERE pus.payroll_period_id = ?
+             ORDER BY c.name, u.name",
+            [$selectedPeriod['id']]
+        );
+        
+        // If no unit statuses, create them from active units
+        if (empty($unitStatuses)) {
+            $activeUnits = $db->fetchAll(
+                "SELECT DISTINCT e.unit_id, e.client_id 
+                 FROM employees e 
+                 WHERE e.status = 'approved' AND e.unit_id IS NOT NULL"
+            );
+            
+            foreach ($activeUnits as $au) {
+                try {
+                    $db->insert('payroll_unit_status', [
+                        'payroll_period_id' => $selectedPeriod['id'],
+                        'client_id' => $au['client_id'],
+                        'unit_id' => $au['unit_id'],
+                        'status' => 'pending'
+                    ]);
+                } catch (Exception $e) {
+                    // Ignore duplicate
+                }
+            }
+            
+            // Refresh statuses
+            $unitStatuses = $db->fetchAll(
+                "SELECT pus.*, c.name as client_name, u.name as unit_name
+                 FROM payroll_unit_status pus
+                 LEFT JOIN clients c ON pus.client_id = c.id
+                 JOIN units u ON pus.unit_id = u.id
+                 WHERE pus.payroll_period_id = ?
+                 ORDER BY c.name, u.name",
+                [$selectedPeriod['id']]
+            );
         }
-        setFlash('success', $msg);
-    } else {
-        setFlash('error', $result['message'] ?? 'Payroll processing failed');
+        
+        // Get payroll data
+        $whereClause = "p.payroll_period_id = :period_id";
+        $params = ['period_id' => $selectedPeriod['id']];
+        
+        if ($filterClientId) {
+            $whereClause .= " AND e.client_id = :client_id";
+            $params['client_id'] = $filterClientId;
+        }
+        if ($filterUnitId) {
+            $whereClause .= " AND e.unit_id = :unit_id";
+            $params['unit_id'] = $filterUnitId;
+        }
+        if ($searchTerm) {
+            $whereClause .= " AND (e.full_name LIKE :search OR e.employee_code LIKE :search)";
+            $params['search'] = '%' . $searchTerm . '%';
+        }
+        
+        $payrollData = $db->fetchAll(
+            "SELECT p.*, e.employee_code, e.full_name, e.designation,
+                    c.name as client_name, u.name as unit_name,
+                    COALESCE(p.basic_da, p.basic + p.da) as basic_da_display
+             FROM payroll p
+             JOIN employees e ON p.employee_id = e.employee_code
+             LEFT JOIN clients c ON e.client_id = c.id
+             LEFT JOIN units u ON e.unit_id = u.id
+             WHERE $whereClause
+             ORDER BY c.name, u.name, e.employee_code",
+            $params
+        );
+        
+        // Get totals
+        $totals = $db->fetch(
+            "SELECT COUNT(*) as employee_count,
+                    SUM(gross_earnings) as total_gross,
+                    SUM(total_deductions) as total_deductions,
+                    SUM(net_pay) as total_net_pay,
+                    SUM(ctc) as total_ctc,
+                    SUM(CASE WHEN salary_hold = 1 THEN 1 ELSE 0 END) as held_count
+             FROM payroll
+             WHERE payroll_period_id = :period_id",
+            ['period_id' => $selectedPeriod['id']]
+        );
     }
-    redirect('index.php?page=payroll/process&period_id=' . $periodId);
 }
 
-// Handle recalculate payroll
-if (isset($_POST['recalculate_payroll']) && isset($_POST['period_id'])) {
+// Handle process unit payroll
+if (isset($_POST['process_unit']) && isset($_POST['period_id']) && isset($_POST['unit_id'])) {
     $periodId = (int)$_POST['period_id'];
-    $employeeCodes = isset($_POST['employee_codes']) ? $_POST['employee_codes'] : [];
+    $unitId = (int)$_POST['unit_id'];
     
-    $result = $payroll->recalculatePayroll($periodId, $employeeCodes);
+    $result = $payroll->processPayroll($periodId, ['unit_id' => $unitId]);
     
-    if (isset($result['success']) && $result['success']) {
-        setFlash('success', $result['message']);
+    if (!empty($result['success'])) {
+        // Update unit status
+        $db->update('payroll_unit_status', [
+            'status' => 'processed',
+            'employee_count' => $result['processed'],
+            'total_gross' => $result['total_gross'],
+            'total_net' => $result['total_net'],
+            'processed_at' => date('Y-m-d H:i:s'),
+            'processed_by' => $_SESSION['user_id']
+        ], 'payroll_period_id = :period_id AND unit_id = :unit_id', 
+           ['period_id' => $periodId, 'unit_id' => $unitId]);
+        
+        setFlash('success', "Processed {$result['processed']} employees for unit!");
     } else {
-        setFlash('error', $result['message'] ?? 'Recalculation failed');
+        setFlash('error', $result['message'] ?? 'Processing failed');
     }
     redirect('index.php?page=payroll/process&period_id=' . $periodId);
 }
 
-// Handle approve payroll
+// Handle finalize unit
+if (isset($_POST['finalize_unit']) && isset($_POST['period_id']) && isset($_POST['unit_id'])) {
+    $periodId = (int)$_POST['period_id'];
+    $unitId = (int)$_POST['unit_id'];
+    
+    // Update unit status
+    $db->update('payroll_unit_status', [
+        'status' => 'finalized',
+        'finalized_at' => date('Y-m-d H:i:s'),
+        'finalized_by' => $_SESSION['user_id']
+    ], 'payroll_period_id = :period_id AND unit_id = :unit_id', 
+       ['period_id' => $periodId, 'unit_id' => $unitId]);
+    
+    // Update period finalized count
+    $finalizedCount = $db->fetch(
+        "SELECT COUNT(*) as count FROM payroll_unit_status 
+         WHERE payroll_period_id = ? AND status = 'finalized'",
+        [$periodId]
+    );
+    
+    $totalUnits = $db->fetch(
+        "SELECT COUNT(*) as count FROM payroll_unit_status WHERE payroll_period_id = ?",
+        [$periodId]
+    );
+    
+    // If all units finalized, update period status
+    if ($finalizedCount['count'] >= $totalUnits['count']) {
+        $db->update('payroll_periods', [
+            'status' => 'Approved',
+            'finalized_units' => $finalizedCount['count']
+        ], 'id = :id', ['id' => $periodId]);
+    }
+    
+    setFlash('success', 'Unit finalized successfully!');
+    redirect('index.php?page=payroll/process&period_id=' . $periodId);
+}
+
+// Handle approve payroll (all units)
 if (isset($_POST['approve_payroll']) && isset($_POST['period_id'])) {
     $periodId = (int)$_POST['period_id'];
-    $result = $payroll->approvePayroll($periodId, $_SESSION['user_id']);
     
-    if (isset($result['success']) && $result['success']) {
-        setFlash('success', 'Payroll approved successfully!');
-    } else {
-        setFlash('error', $result['message'] ?? 'Failed to approve');
-    }
+    // Approve all units
+    $db->update('payroll_unit_status', [
+        'status' => 'finalized',
+        'approved_at' => date('Y-m-d H:i:s'),
+        'approved_by' => $_SESSION['user_id']
+    ], 'payroll_period_id = :period_id AND status = "processed"', 
+       ['period_id' => $periodId]);
+    
+    $db->update('payroll_periods', [
+        'status' => 'Approved',
+        'approved_at' => date('Y-m-d H:i:s'),
+        'approved_by' => $_SESSION['user_id']
+    ], 'id = :id', ['id' => $periodId]);
+    
+    setFlash('success', 'Payroll approved successfully!');
     redirect('index.php?page=payroll/process&period_id=' . $periodId);
 }
 
-// Handle freeze payroll
-if (isset($_POST['freeze_payroll']) && isset($_POST['period_id'])) {
+// Handle bulk salary update
+if (isset($_POST['bulk_update_salary']) && isset($_POST['period_id'])) {
     $periodId = (int)$_POST['period_id'];
-    $result = $payroll->freezePeriod($periodId);
+    $updates = $_POST['salary_updates'] ?? [];
     
-    if (isset($result['success']) && $result['success']) {
-        setFlash('success', 'Payroll frozen successfully!');
-    } else {
-        setFlash('error', $result['message'] ?? 'Failed to freeze');
+    $updated = 0;
+    $db->beginTransaction();
+    
+    try {
+        foreach ($updates as $empCode => $data) {
+            $basicDA = floatval($data['basic_da'] ?? 0);
+            $hra = floatval($data['hra'] ?? 0);
+            $lww = floatval($data['lww'] ?? 0);
+            $bonus = floatval($data['bonus'] ?? 0);
+            $washing = floatval($data['washing'] ?? 0);
+            $other = floatval($data['other'] ?? 0);
+            
+            $newGross = $basicDA + $hra + $lww + $bonus + $washing + $other;
+            
+            // Recalculate deductions
+            $pfEmp = round(min($basicDA, 15000) * 0.12, 2);
+            $esiEmp = ($newGross <= 21000) ? round($newGross * 0.0075, 2) : 0;
+            $pt = 200; // Simplified PT
+            
+            $totalDed = $pfEmp + $esiEmp + $pt;
+            $netPay = $newGross - $totalDed;
+            
+            $db->update('payroll', [
+                'basic_da' => $basicDA,
+                'basic' => $basicDA * 0.6,
+                'da' => $basicDA * 0.4,
+                'hra' => $hra,
+                'lww' => $lww,
+                'bonus_amount' => $bonus,
+                'washing_allowance' => $washing,
+                'other_allowance' => $other,
+                'gross_earnings' => $newGross,
+                'gross_salary' => $newGross,
+                'pf_employee' => $pfEmp,
+                'esi_employee' => $esiEmp,
+                'professional_tax' => $pt,
+                'total_deductions' => $totalDed,
+                'net_pay' => $netPay
+            ], 'payroll_period_id = :period_id AND employee_id = :emp_code',
+               ['period_id' => $periodId, 'emp_code' => $empCode]);
+            
+            $updated++;
+        }
+        
+        $db->commit();
+        setFlash('success', "$updated salary records updated!");
+        
+    } catch (Exception $e) {
+        $db->rollBack();
+        setFlash('error', 'Update failed: ' . $e->getMessage());
     }
-    redirect('index.php?page=payroll/process&period_id=' . $periodId);
-}
-
-// Handle unfreeze payroll
-if (isset($_POST['unfreeze_payroll']) && isset($_POST['period_id'])) {
-    $periodId = (int)$_POST['period_id'];
-    $result = $payroll->unfreezePeriod($periodId);
     
-    if (isset($result['success']) && $result['success']) {
-        setFlash('success', 'Payroll unfrozen successfully!');
-    } else {
-        setFlash('error', $result['message'] ?? 'Failed to unfreeze');
-    }
-    redirect('index.php?page=payroll/process&period_id=' . $periodId);
-}
-
-// Handle mark as paid
-if (isset($_POST['mark_paid']) && isset($_POST['period_id'])) {
-    $periodId = (int)$_POST['period_id'];
-    $paymentDate = $_POST['payment_date'] ?? date('Y-m-d');
-    
-    $result = $payroll->markAsPaid($periodId, $paymentDate);
-    
-    if (isset($result['success']) && $result['success']) {
-        setFlash('success', 'Payroll marked as paid!');
-    } else {
-        setFlash('error', $result['message'] ?? 'Failed to mark as paid');
-    }
     redirect('index.php?page=payroll/process&period_id=' . $periodId);
 }
 
@@ -163,7 +308,16 @@ if (isset($_POST['delete_payroll']) && isset($_POST['period_id'])) {
     $periodId = (int)$_POST['period_id'];
     $result = $payroll->deletePayroll($periodId);
     
-    if (isset($result['success']) && $result['success']) {
+    if (!empty($result['success'])) {
+        // Reset unit statuses
+        $db->update('payroll_unit_status', [
+            'status' => 'pending',
+            'employee_count' => 0,
+            'total_gross' => 0,
+            'total_net' => 0,
+            'processed_at' => null
+        ], 'payroll_period_id = :id', ['id' => $periodId]);
+        
         setFlash('success', 'Payroll deleted successfully!');
     } else {
         setFlash('error', $result['message'] ?? 'Failed to delete');
@@ -171,66 +325,7 @@ if (isset($_POST['delete_payroll']) && isset($_POST['period_id'])) {
     redirect('index.php?page=payroll/process&period_id=' . $periodId);
 }
 
-// Handle hold salary
-if (isset($_POST['hold_salary']) && isset($_POST['period_id'])) {
-    $periodId = (int)$_POST['period_id'];
-    $employeeCodes = $_POST['hold_employees'] ?? [];
-    $reason = $_POST['hold_reason'] ?? '';
-    
-    if (!empty($employeeCodes)) {
-        $result = $payroll->holdSalary($periodId, $employeeCodes, $reason);
-        setFlash('success', $result['message']);
-    }
-    redirect('index.php?page=payroll/process&period_id=' . $periodId);
-}
-
-// Handle release salary
-if (isset($_POST['release_salary']) && isset($_POST['period_id'])) {
-    $periodId = (int)$_POST['period_id'];
-    $employeeCodes = $_POST['release_employees'] ?? [];
-    
-    if (!empty($employeeCodes)) {
-        $result = $payroll->releaseSalary($periodId, $employeeCodes);
-        setFlash('success', $result['message']);
-    }
-    redirect('index.php?page=payroll/process&period_id=' . $periodId);
-}
-
-// Handle resolve exception
-if (isset($_POST['resolve_exception']) && isset($_POST['exception_id'])) {
-    $exceptionId = (int)$_POST['exception_id'];
-    $payroll->resolveException($exceptionId);
-    setFlash('success', 'Exception resolved!');
-    redirect('index.php?page=payroll/process&period_id=' . ($_GET['period_id'] ?? ''));
-}
-
-// Get selected period
-$selectedPeriod = null;
-$payrollData = [];
-$totals = null;
-$exceptions = [];
-
-if (isset($_GET['period_id']) && !empty($_GET['period_id'])) {
-    $stmt = $db->prepare("SELECT * FROM payroll_periods WHERE id = ?");
-    $stmt->execute([(int)$_GET['period_id']]);
-    $selectedPeriod = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-    if ($selectedPeriod) {
-        // Build filters
-        $filters = [];
-        if ($filterClientId) $filters['client_id'] = $filterClientId;
-        if ($filterUnitId) $filters['unit_id'] = $filterUnitId;
-        if ($filterStatus) $filters['status'] = $filterStatus;
-        if ($filterHold !== '') $filters['salary_hold'] = $filterHold;
-        if ($searchTerm) $filters['search'] = $searchTerm;
-        
-        $payrollData = $payroll->getPayrollReport($selectedPeriod['id'], $filters);
-        $totals = $payroll->getPeriodSummary($selectedPeriod['id']);
-        $exceptions = $payroll->getExceptions($selectedPeriod['id']);
-    }
-}
-
-// Group periods by year for tabs
+// Group periods by year
 $periodsByYear = [];
 foreach ($periods as $p) {
     $year = $p['year'] ?? date('Y', strtotime($p['start_date'] ?? 'now'));
@@ -241,34 +336,28 @@ foreach ($periods as $p) {
 }
 krsort($periodsByYear);
 
-// Define column visibility options
+// Define visible columns
 $visibleColumns = [
     'employee_code' => ['label' => 'Emp Code', 'default' => true],
     'full_name' => ['label' => 'Name', 'default' => true],
     'client_unit' => ['label' => 'Client/Unit', 'default' => true],
-    'paid_days' => ['label' => 'Paid Days', 'default' => true],
-    'basic' => ['label' => 'Basic', 'default' => false],
-    'da' => ['label' => 'DA', 'default' => false],
+    'paid_days' => ['label' => 'Days', 'default' => true],
+    'basic_da' => ['label' => 'Basic+DA', 'default' => true],
     'hra' => ['label' => 'HRA', 'default' => false],
+    'lww' => ['label' => 'LWW', 'default' => false],
+    'bonus' => ['label' => 'Bonus', 'default' => false],
+    'washing' => ['label' => 'Washing', 'default' => false],
+    'other' => ['label' => 'Other', 'default' => false],
     'gross' => ['label' => 'Gross', 'default' => true],
-    'pf_emp' => ['label' => 'PF (Emp)', 'default' => false],
-    'esi_emp' => ['label' => 'ESI (Emp)', 'default' => false],
-    'pt' => ['label' => 'PT', 'default' => false],
-    'advance' => ['label' => 'Advance', 'default' => false],
-    'deductions' => ['label' => 'Deductions', 'default' => true],
+    'deductions' => ['label' => 'Ded', 'default' => true],
     'net_pay' => ['label' => 'Net Pay', 'default' => true],
-    'ctc' => ['label' => 'CTC', 'default' => false],
     'status' => ['label' => 'Status', 'default' => true],
 ];
 
-// Store selected columns from cookie or use defaults
 $selectedColumns = isset($_COOKIE['payroll_columns']) ? json_decode($_COOKIE['payroll_columns'], true) : null;
 if ($selectedColumns === null) {
     $selectedColumns = array_keys(array_filter($visibleColumns, fn($c) => $c['default']));
 }
-
-// Convert allUnits to JSON for JavaScript
-$allUnitsJson = json_encode($allUnits);
 ?>
 
 <div class="row">
@@ -276,60 +365,51 @@ $allUnitsJson = json_encode($allUnits);
         <?php if (!$selectedPeriod): ?>
         <!-- Period Selection View -->
         <div class="card">
-            <div class="card-header">
+            <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="card-title mb-0"><i class="bi bi-calendar me-2"></i>Payroll Processing</h5>
-                <div class="card-actions">
-                    <form method="POST" class="d-inline">
-                        <div class="input-group input-group-sm">
-                            <select class="form-select form-select-sm" name="month">
-                                <?php for ($m = 1; $m <= 12; $m++): ?>
-                                <option value="<?php echo $m; ?>" <?php echo $m == $currentMonth ? 'selected' : ''; ?>>
-                                    <?php echo date('M', mktime(0, 0, 0, $m, 1)); ?>
-                                </option>
-                                <?php endfor; ?>
-                            </select>
-                            <select class="form-select form-select-sm" name="year">
-                                <?php for ($y = $currentYear; $y >= $currentYear - 2; $y--): ?>
-                                <option value="<?php echo $y; ?>"><?php echo $y; ?></option>
-                                <?php endfor; ?>
-                            </select>
-                            <button type="submit" name="create_period" class="btn btn-primary">
-                                <i class="bi bi-plus"></i> Create Period
-                            </button>
-                        </div>
-                    </form>
-                </div>
+                <form method="POST" class="d-flex gap-2">
+                    <select class="form-select form-select-sm" name="month" style="width: auto;">
+                        <?php for ($m = 1; $m <= 12; $m++): ?>
+                        <option value="<?php echo $m; ?>" <?php echo $m == $currentMonth ? 'selected' : ''; ?>>
+                            <?php echo date('M', mktime(0, 0, 0, $m, 1)); ?>
+                        </option>
+                        <?php endfor; ?>
+                    </select>
+                    <select class="form-select form-select-sm" name="year" style="width: auto;">
+                        <?php for ($y = $currentYear; $y >= $currentYear - 2; $y--): ?>
+                        <option value="<?php echo $y; ?>"><?php echo $y; ?></option>
+                        <?php endfor; ?>
+                    </select>
+                    <button type="submit" name="create_period" class="btn btn-primary btn-sm">
+                        <i class="bi bi-plus"></i> Create Period
+                    </button>
+                </form>
             </div>
             
-            <!-- Year Tabs -->
             <div class="card-body p-0">
-                <ul class="nav nav-tabs px-3 pt-2" id="yearTabs" role="tablist">
+                <!-- Year Tabs -->
+                <ul class="nav nav-tabs px-3 pt-2" role="tablist">
                     <?php $firstYear = true; foreach ($periodsByYear as $year => $yearPeriods): ?>
-                    <li class="nav-item" role="presentation">
+                    <li class="nav-item">
                         <button class="nav-link <?php echo $firstYear ? 'active' : ''; ?>" 
-                                id="year-<?php echo $year; ?>-tab" data-bs-toggle="tab" 
-                                data-bs-target="#year-<?php echo $year; ?>" type="button">
+                                data-bs-toggle="tab" data-bs-target="#year-<?php echo $year; ?>">
                             <?php echo $year; ?>
                         </button>
                     </li>
                     <?php $firstYear = false; endforeach; ?>
                     <?php if (empty($periodsByYear)): ?>
-                    <li class="nav-item">
-                        <span class="nav-link active"><?php echo $currentYear; ?></span>
-                    </li>
+                    <li class="nav-item"><span class="nav-link active"><?php echo $currentYear; ?></span></li>
                     <?php endif; ?>
                 </ul>
                 
-                <div class="tab-content p-3" id="yearTabsContent">
+                <div class="tab-content p-3">
                     <?php $firstYear = true; foreach ($periodsByYear as $year => $yearPeriods): ?>
-                    <div class="tab-pane fade <?php echo $firstYear ? 'show active' : ''; ?>" 
-                         id="year-<?php echo $year; ?>" role="tabpanel">
-                         
+                    <div class="tab-pane fade <?php echo $firstYear ? 'show active' : ''; ?>" id="year-<?php echo $year; ?>">
                         <div class="row g-3">
                             <?php foreach ($yearPeriods as $p): ?>
                             <div class="col-md-3">
                                 <a href="index.php?page=payroll/process&period_id=<?php echo $p['id']; ?>" 
-                                   class="card h-100 text-decoration-none <?php echo $selectedPeriod && $selectedPeriod['id'] == $p['id'] ? 'border-primary' : ''; ?>">
+                                   class="card h-100 text-decoration-none hover-lift">
                                     <div class="card-body">
                                         <div class="d-flex justify-content-between align-items-start mb-2">
                                             <h6 class="mb-0"><?php echo sanitize($p['period_name']); ?></h6>
@@ -337,30 +417,24 @@ $allUnitsJson = json_encode($allUnits);
                                                 echo $p['status'] === 'Draft' ? 'secondary' : 
                                                     ($p['status'] === 'Processed' ? 'info' : 
                                                     ($p['status'] === 'Approved' ? 'success' : 
-                                                    ($p['status'] === 'Paid' ? 'primary' : 
-                                                    ($p['status'] === 'Frozen' || $p['status'] === 'Locked' ? 'danger' : 'warning')))); 
+                                                    ($p['status'] === 'Paid' ? 'primary' : 'warning'))); 
                                             ?>"><?php echo sanitize($p['status']); ?></span>
                                         </div>
                                         <small class="text-muted">
                                             <i class="bi bi-people me-1"></i><?php echo $p['employee_count'] ?? 0; ?> employees
-                                            <?php if (($p['hold_count'] ?? 0) > 0): ?>
-                                            <span class="text-warning ms-2"><i class="bi bi-pause-circle"></i> <?php echo $p['hold_count']; ?> held</span>
-                                            <?php endif; ?>
                                         </small>
                                     </div>
                                 </a>
                             </div>
                             <?php endforeach; ?>
                         </div>
-                        
                     </div>
                     <?php $firstYear = false; endforeach; ?>
                     
                     <?php if (empty($periodsByYear)): ?>
                     <div class="text-center py-5 text-muted">
                         <i class="bi bi-calendar-plus fs-1"></i>
-                        <p class="mt-3">No payroll periods found.</p>
-                        <p>Create a new period using the button above.</p>
+                        <p class="mt-3">No payroll periods found. Create a new period above.</p>
                     </div>
                     <?php endif; ?>
                 </div>
@@ -370,7 +444,7 @@ $allUnitsJson = json_encode($allUnits);
         <?php else: ?>
         <!-- Payroll Details View -->
         
-        <!-- Header with Actions -->
+        <!-- Header -->
         <div class="card mb-3">
             <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <div class="d-flex align-items-center gap-2">
@@ -379,28 +453,26 @@ $allUnitsJson = json_encode($allUnits);
                     </a>
                     <h5 class="card-title mb-0">
                         <i class="bi bi-cash-stack me-2"></i>
-                        Payroll - <?php echo sanitize($selectedPeriod['period_name']); ?>
-                        <?php if (in_array($selectedPeriod['status'], ['Frozen', 'Locked'])): ?>
-                        <span class="badge bg-danger ms-2"><i class="bi bi-lock"></i> Frozen</span>
-                        <?php endif; ?>
+                        <?php echo sanitize($selectedPeriod['period_name']); ?>
+                        <span class="badge bg-<?php 
+                            echo $selectedPeriod['status'] === 'Draft' ? 'secondary' : 
+                                ($selectedPeriod['status'] === 'Approved' ? 'success' : 'warning'); 
+                        ?> ms-2"><?php echo sanitize($selectedPeriod['status']); ?></span>
                     </h5>
                 </div>
                 <div class="btn-group btn-group-sm">
                     <?php if ($selectedPeriod['status'] === 'Draft'): ?>
-                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#processModal">
-                        <i class="bi bi-play-fill me-1"></i>Process
-                    </button>
+                    <a href="index.php?page=bulk-upload/salary" class="btn btn-outline-primary">
+                        <i class="bi bi-cloud-upload me-1"></i>Bulk Upload Salary
+                    </a>
                     <?php elseif ($selectedPeriod['status'] === 'Processed'): ?>
                     <form method="POST" class="d-inline">
                         <input type="hidden" name="period_id" value="<?php echo $selectedPeriod['id']; ?>">
                         <button type="submit" name="approve_payroll" class="btn btn-success"
-                                onclick="return confirm('Approve payroll for this period?')">
-                            <i class="bi bi-check-lg me-1"></i>Approve
+                                onclick="return confirm('Approve all payroll for this period?')">
+                            <i class="bi bi-check-lg me-1"></i>Approve All
                         </button>
                     </form>
-                    <button type="button" class="btn btn-outline-info" onclick="openRecalculateModal()">
-                        <i class="bi bi-arrow-repeat me-1"></i>Recalculate
-                    </button>
                     <form method="POST" class="d-inline">
                         <input type="hidden" name="period_id" value="<?php echo $selectedPeriod['id']; ?>">
                         <button type="submit" name="delete_payroll" class="btn btn-outline-danger"
@@ -408,68 +480,128 @@ $allUnitsJson = json_encode($allUnits);
                             <i class="bi bi-trash me-1"></i>Delete
                         </button>
                     </form>
-                    <?php elseif ($selectedPeriod['status'] === 'Approved'): ?>
-                    <form method="POST" class="d-inline">
-                        <input type="hidden" name="period_id" value="<?php echo $selectedPeriod['id']; ?>">
-                        <input type="date" name="payment_date" value="<?php echo date('Y-m-d'); ?>" class="form-control form-control-sm d-inline-block" style="width: auto;">
-                        <button type="submit" name="mark_paid" class="btn btn-success"
-                                onclick="return confirm('Mark payroll as paid?')">
-                            <i class="bi bi-cash me-1"></i>Mark Paid
-                        </button>
-                    </form>
-                    <form method="POST" class="d-inline">
-                        <input type="hidden" name="period_id" value="<?php echo $selectedPeriod['id']; ?>">
-                        <button type="submit" name="freeze_payroll" class="btn btn-outline-danger"
-                                onclick="return confirm('Freeze payroll? This will prevent any further modifications.')">
-                            <i class="bi bi-lock me-1"></i>Freeze
-                        </button>
-                    </form>
-                    <?php elseif ($selectedPeriod['status'] === 'Frozen' || $selectedPeriod['status'] === 'Locked'): ?>
-                    <form method="POST" class="d-inline">
-                        <input type="hidden" name="period_id" value="<?php echo $selectedPeriod['id']; ?>">
-                        <button type="submit" name="unfreeze_payroll" class="btn btn-warning"
-                                onclick="return confirm('Unfreeze payroll? This will allow modifications.')">
-                            <i class="bi bi-unlock me-1"></i>Unfreeze
-                        </button>
-                    </form>
                     <?php endif; ?>
                     
-                    <?php if (in_array($selectedPeriod['status'], ['Processed', 'Approved', 'Paid'])): ?>
+                    <?php if (in_array($selectedPeriod['status'], ['Processed', 'Approved'])): ?>
                     <a href="index.php?page=payroll/payslips&period_id=<?php echo $selectedPeriod['id']; ?>" 
                        class="btn btn-outline-primary">
                         <i class="bi bi-file-text me-1"></i>Payslips
                     </a>
-                    <div class="btn-group">
-                        <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
-                            <i class="bi bi-download me-1"></i>Export
-                        </button>
-                        <ul class="dropdown-menu dropdown-menu-end">
-                            <li><a class="dropdown-item" href="index.php?page=payroll/export&period_id=<?php echo $selectedPeriod['id']; ?>&format=excel">
-                                <i class="bi bi-file-excel me-2"></i>Excel
-                            </a></li>
-                            <li><a class="dropdown-item" href="index.php?page=payroll/export&period_id=<?php echo $selectedPeriod['id']; ?>&format=pdf">
-                                <i class="bi bi-file-pdf me-2"></i>PDF
-                            </a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="index.php?page=payroll/bank-advice&period_id=<?php echo $selectedPeriod['id']; ?>">
-                                <i class="bi bi-bank me-2"></i>Bank Advice
-                            </a></li>
-                            <li><a class="dropdown-item" href="index.php?page=payroll/export&period_id=<?php echo $selectedPeriod['id']; ?>&format=neft">
-                                <i class="bi bi-credit-card me-2"></i>NEFT Format
-                            </a></li>
-                        </ul>
-                    </div>
                     <?php endif; ?>
                 </div>
             </div>
             
-            <!-- Filters -->
+            <!-- Summary -->
+            <?php if ($totals && $totals['employee_count'] > 0): ?>
             <div class="card-body border-bottom py-2">
-                <form method="GET" class="row g-2 align-items-end" id="filterForm">
+                <div class="row text-center g-2">
+                    <div class="col">
+                        <div class="small text-muted">Employees</div>
+                        <div class="h5 mb-0"><?php echo number_format($totals['employee_count']); ?></div>
+                    </div>
+                    <div class="col">
+                        <div class="small text-muted">Gross</div>
+                        <div class="h5 mb-0 text-primary"><?php echo formatCurrency($totals['total_gross']); ?></div>
+                    </div>
+                    <div class="col">
+                        <div class="small text-muted">Deductions</div>
+                        <div class="h5 mb-0 text-danger"><?php echo formatCurrency($totals['total_deductions']); ?></div>
+                    </div>
+                    <div class="col">
+                        <div class="small text-muted">Net Pay</div>
+                        <div class="h5 mb-0 text-success"><?php echo formatCurrency($totals['total_net_pay']); ?></div>
+                    </div>
+                    <?php if ($totals['held_count'] > 0): ?>
+                    <div class="col">
+                        <div class="small text-muted">Held</div>
+                        <div class="h5 mb-0 text-warning"><?php echo $totals['held_count']; ?></div>
+                    </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <?php endif; ?>
+        </div>
+        
+        <!-- Unit-wise Status -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="bi bi-building me-2"></i>Unit-wise Processing Status</h6>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Client</th>
+                                <th>Unit</th>
+                                <th class="text-center">Status</th>
+                                <th class="text-end">Employees</th>
+                                <th class="text-end">Gross</th>
+                                <th class="text-end">Net Pay</th>
+                                <th class="text-center">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (empty($unitStatuses)): ?>
+                            <tr>
+                                <td colspan="7" class="text-center py-4 text-muted">
+                                    No units found. Please upload attendance first.
+                                </td>
+                            </tr>
+                            <?php else: ?>
+                            <?php foreach ($unitStatuses as $us): ?>
+                            <tr>
+                                <td><?php echo sanitize($us['client_name'] ?? 'N/A'); ?></td>
+                                <td><?php echo sanitize($us['unit_name']); ?></td>
+                                <td class="text-center">
+                                    <span class="badge bg-<?php 
+                                        echo $us['status'] === 'pending' ? 'secondary' : 
+                                            ($us['status'] === 'processed' ? 'info' : 
+                                            ($us['status'] === 'finalized' ? 'success' : 'warning'));
+                                    ?>"><?php echo ucfirst($us['status']); ?></span>
+                                </td>
+                                <td class="text-end"><?php echo $us['employee_count'] ?? 0; ?></td>
+                                <td class="text-end"><?php echo formatCurrency($us['total_gross'] ?? 0); ?></td>
+                                <td class="text-end"><?php echo formatCurrency($us['total_net'] ?? 0); ?></td>
+                                <td class="text-center">
+                                    <?php if ($us['status'] === 'pending'): ?>
+                                    <form method="POST" class="d-inline">
+                                        <input type="hidden" name="period_id" value="<?php echo $selectedPeriod['id']; ?>">
+                                        <input type="hidden" name="unit_id" value="<?php echo $us['unit_id']; ?>">
+                                        <button type="submit" name="process_unit" class="btn btn-sm btn-primary">
+                                            <i class="bi bi-play-fill"></i> Process
+                                        </button>
+                                    </form>
+                                    <?php elseif ($us['status'] === 'processed'): ?>
+                                    <form method="POST" class="d-inline">
+                                        <input type="hidden" name="period_id" value="<?php echo $selectedPeriod['id']; ?>">
+                                        <input type="hidden" name="unit_id" value="<?php echo $us['unit_id']; ?>">
+                                        <button type="submit" name="finalize_unit" class="btn btn-sm btn-success"
+                                                onclick="return confirm('Finalize this unit?')">
+                                            <i class="bi bi-check-lg"></i> Finalize
+                                        </button>
+                                    </form>
+                                    <?php else: ?>
+                                    <span class="text-success"><i class="bi bi-check-circle"></i> Done</span>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Filters -->
+        <div class="card mb-3">
+            <div class="card-body py-2">
+                <form method="GET" class="row g-2 align-items-end">
                     <input type="hidden" name="page" value="payroll/process">
                     <input type="hidden" name="period_id" value="<?php echo $selectedPeriod['id']; ?>">
                     
-                    <div class="col-md-2">
+                    <div class="col-md-3">
                         <label class="form-label small">Client</label>
                         <select name="client_id" id="filterClient" class="form-select form-select-sm" onchange="filterUnitsDropdown()">
                             <option value="">All Clients</option>
@@ -481,7 +613,7 @@ $allUnitsJson = json_encode($allUnits);
                         </select>
                     </div>
                     
-                    <div class="col-md-2">
+                    <div class="col-md-3">
                         <label class="form-label small">Unit</label>
                         <select name="unit_id" id="filterUnit" class="form-select form-select-sm">
                             <option value="">All Units</option>
@@ -493,33 +625,13 @@ $allUnitsJson = json_encode($allUnits);
                         </select>
                     </div>
                     
-                    <div class="col-md-2">
-                        <label class="form-label small">Status</label>
-                        <select name="filter_status" class="form-select form-select-sm">
-                            <option value="">All Status</option>
-                            <option value="Processed" <?php echo $filterStatus === 'Processed' ? 'selected' : ''; ?>>Processed</option>
-                            <option value="Hold" <?php echo $filterStatus === 'Hold' ? 'selected' : ''; ?>>Hold</option>
-                            <option value="Approved" <?php echo $filterStatus === 'Approved' ? 'selected' : ''; ?>>Approved</option>
-                            <option value="Paid" <?php echo $filterStatus === 'Paid' ? 'selected' : ''; ?>>Paid</option>
-                        </select>
-                    </div>
-                    
-                    <div class="col-md-1">
-                        <label class="form-label small">Hold</label>
-                        <select name="salary_hold" class="form-select form-select-sm">
-                            <option value="">All</option>
-                            <option value="1" <?php echo $filterHold === '1' ? 'selected' : ''; ?>>Yes</option>
-                            <option value="0" <?php echo $filterHold === '0' ? 'selected' : ''; ?>>No</option>
-                        </select>
-                    </div>
-                    
-                    <div class="col-md-2">
+                    <div class="col-md-3">
                         <label class="form-label small">Search</label>
                         <input type="text" name="search" class="form-control form-control-sm" 
                                placeholder="Name or Code" value="<?php echo sanitize($searchTerm); ?>">
                     </div>
                     
-                    <div class="col-md-2">
+                    <div class="col-md-3">
                         <div class="btn-group w-100">
                             <button type="submit" class="btn btn-primary btn-sm">
                                 <i class="bi bi-filter"></i> Filter
@@ -530,554 +642,172 @@ $allUnitsJson = json_encode($allUnits);
                             </a>
                         </div>
                     </div>
-                    
-                    <div class="col-md-1">
-                        <div class="dropdown">
-                            <button class="btn btn-outline-secondary btn-sm w-100" type="button" data-bs-toggle="dropdown">
-                                <i class="bi bi-layout-three-columns"></i>
-                            </button>
-                            <div class="dropdown-menu dropdown-menu-end p-3" style="width: 200px;">
-                                <h6 class="mb-2">Show Columns</h6>
-                                <?php foreach ($visibleColumns as $col => $info): ?>
-                                <div class="form-check">
-                                    <input class="form-check-input column-toggle" type="checkbox" 
-                                           id="col_<?php echo $col; ?>" 
-                                           data-column="<?php echo $col; ?>"
-                                           <?php echo in_array($col, $selectedColumns) ? 'checked' : ''; ?>>
-                                    <label class="form-check-label small" for="col_<?php echo $col; ?>">
-                                        <?php echo $info['label']; ?>
-                                    </label>
-                                </div>
-                                <?php endforeach; ?>
-                            </div>
-                        </div>
-                    </div>
                 </form>
             </div>
-            
-            <!-- Summary Cards -->
-            <?php if ($totals && ($totals['employee_count'] ?? 0) > 0): ?>
-            <div class="card-body border-bottom py-2">
-                <div class="row text-center g-2">
-                    <div class="col">
-                        <div class="small text-muted">Employees</div>
-                        <div class="h5 mb-0"><?php echo number_format($totals['employee_count'] ?? 0); ?></div>
-                    </div>
-                    <div class="col">
-                        <div class="small text-muted">Gross</div>
-                        <div class="h5 mb-0 text-primary"><?php echo formatCurrency($totals['total_gross'] ?? 0); ?></div>
-                    </div>
-                    <div class="col">
-                        <div class="small text-muted">Deductions</div>
-                        <div class="h5 mb-0 text-danger"><?php echo formatCurrency($totals['total_deductions'] ?? 0); ?></div>
-                    </div>
-                    <div class="col">
-                        <div class="small text-muted">Net Pay</div>
-                        <div class="h5 mb-0 text-success"><?php echo formatCurrency($totals['total_net_pay'] ?? 0); ?></div>
-                    </div>
-                    <div class="col">
-                        <div class="small text-muted">CTC</div>
-                        <div class="h5 mb-0"><?php echo formatCurrency($totals['total_ctc'] ?? 0); ?></div>
-                    </div>
-                    <?php if (($totals['held_count'] ?? 0) > 0): ?>
-                    <div class="col">
-                        <div class="small text-muted">Held</div>
-                        <div class="h5 mb-0 text-warning"><?php echo $totals['held_count']; ?></div>
-                    </div>
-                    <?php endif; ?>
-                    <?php if (($totals['dirty_count'] ?? 0) > 0): ?>
-                    <div class="col">
-                        <div class="small text-muted">Needs Recalc</div>
-                        <div class="h5 mb-0 text-info"><?php echo $totals['dirty_count']; ?></div>
-                    </div>
-                    <?php endif; ?>
-                </div>
-            </div>
-            <?php endif; ?>
         </div>
         
-        <!-- Exceptions Panel -->
-        <?php if (!empty($exceptions)): ?>
-        <div class="card mb-3 border-warning">
-            <div class="card-header bg-warning text-dark py-2">
-                <h6 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>Payroll Exceptions (<?php echo count($exceptions); ?>)</h6>
+        <!-- Payroll Data Grid (Excel-like) -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-table me-2"></i>Payroll Data</h6>
+                <?php if (!empty($payrollData) && $selectedPeriod['status'] !== 'Approved'): ?>
+                <button type="button" class="btn btn-sm btn-outline-primary" onclick="toggleEditMode()">
+                    <i class="bi bi-pencil me-1"></i>Edit Mode
+                </button>
+                <?php endif; ?>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
-                    <table class="table table-sm table-hover mb-0">
-                        <thead>
+                    <table class="table table-sm table-hover mb-0" id="payrollTable">
+                        <thead class="table-light">
                             <tr>
-                                <th>Employee</th>
-                                <th>Type</th>
-                                <th>Message</th>
-                                <th>Action</th>
+                                <th>Emp Code</th>
+                                <th>Name</th>
+                                <th>Client/Unit</th>
+                                <th class="text-center">Days</th>
+                                <th class="text-end">Basic+DA</th>
+                                <th class="text-end">HRA</th>
+                                <th class="text-end">LWW</th>
+                                <th class="text-end">Bonus</th>
+                                <th class="text-end">Wash</th>
+                                <th class="text-end">Other</th>
+                                <th class="text-end">Gross</th>
+                                <th class="text-end">Ded</th>
+                                <th class="text-end">Net Pay</th>
+                                <th>Status</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($exceptions as $ex): ?>
+                            <?php if (empty($payrollData)): ?>
                             <tr>
-                                <td>
-                                    <a href="index.php?page=employee/view&id=<?php echo $ex['employee_id']; ?>">
-                                        <?php echo sanitize($ex['full_name']); ?>
-                                    </a>
-                                    <small class="text-muted d-block"><?php echo sanitize($ex['employee_code']); ?></small>
+                                <td colspan="14" class="text-center py-4 text-muted">
+                                    <?php if ($selectedPeriod['status'] === 'Draft'): ?>
+                                    No payroll data. Process units above to generate payroll.
+                                    <?php else: ?>
+                                    No records found matching your filters.
+                                    <?php endif; ?>
                                 </td>
+                            </tr>
+                            <?php else: ?>
+                            <?php foreach ($payrollData as $row): 
+                                $basicDA = floatval($row['basic_da_display'] ?? ($row['basic'] ?? 0) + ($row['da'] ?? 0));
+                            ?>
+                            <tr class="<?php echo ($row['salary_hold'] ?? 0) ? 'table-warning' : ''; ?>"
+                                data-emp-code="<?php echo $row['employee_code']; ?>">
+                                <td><?php echo sanitize($row['employee_code']); ?></td>
+                                <td><?php echo sanitize($row['full_name']); ?></td>
+                                <td><small><?php echo sanitize($row['client_name']); ?> / <?php echo sanitize($row['unit_name']); ?></small></td>
+                                <td class="text-center"><?php echo $row['paid_days'] ?? 0; ?></td>
+                                <td class="text-end editable-cell" data-field="basic_da"><?php echo formatCurrency($basicDA); ?></td>
+                                <td class="text-end editable-cell" data-field="hra"><?php echo formatCurrency($row['hra'] ?? 0); ?></td>
+                                <td class="text-end editable-cell" data-field="lww"><?php echo formatCurrency($row['lww'] ?? 0); ?></td>
+                                <td class="text-end editable-cell" data-field="bonus"><?php echo formatCurrency($row['bonus_amount'] ?? 0); ?></td>
+                                <td class="text-end editable-cell" data-field="washing"><?php echo formatCurrency($row['washing_allowance'] ?? 0); ?></td>
+                                <td class="text-end editable-cell" data-field="other"><?php echo formatCurrency($row['other_allowance'] ?? 0); ?></td>
+                                <td class="text-end"><strong class="gross-display"><?php echo formatCurrency($row['gross_earnings'] ?? 0); ?></strong></td>
+                                <td class="text-end text-danger"><?php echo formatCurrency($row['total_deductions'] ?? 0); ?></td>
+                                <td class="text-end"><strong class="text-success net-display"><?php echo formatCurrency($row['net_pay'] ?? 0); ?></strong></td>
                                 <td>
                                     <span class="badge bg-<?php 
-                                        echo $ex['exception_type'] === 'Missing Attendance' ? 'warning' :
-                                            ($ex['exception_type'] === 'Missing Bank Details' ? 'danger' :
-                                            ($ex['exception_type'] === 'Undefined Salary' ? 'danger' : 'secondary'));
-                                    ?>"><?php echo sanitize($ex['exception_type']); ?></span>
-                                </td>
-                                <td><small><?php echo sanitize($ex['exception_message']); ?></small></td>
-                                <td>
-                                    <form method="POST" class="d-inline">
-                                        <input type="hidden" name="exception_id" value="<?php echo $ex['id']; ?>">
-                                        <button type="submit" name="resolve_exception" class="btn btn-sm btn-outline-success">
-                                            <i class="bi bi-check"></i>
-                                        </button>
-                                    </form>
+                                        echo ($row['status'] ?? '') === 'Processed' ? 'info' : 
+                                            (($row['status'] ?? '') === 'Approved' ? 'success' : 'secondary');
+                                    ?>"><?php echo sanitize($row['status'] ?? 'Draft'); ?></span>
                                 </td>
                             </tr>
                             <?php endforeach; ?>
+                            <?php endif; ?>
                         </tbody>
                     </table>
                 </div>
             </div>
         </div>
-        <?php endif; ?>
-        
-        <!-- Payroll Table -->
-        <div class="card">
-            <div class="card-body p-0">
-                <form id="bulkForm" method="POST">
-                    <input type="hidden" name="period_id" value="<?php echo $selectedPeriod['id']; ?>">
-                    
-                    <!-- Bulk Actions Bar -->
-                    <?php if (!in_array($selectedPeriod['status'], ['Frozen', 'Locked']) && !empty($payrollData)): ?>
-                    <div class="bg-light px-3 py-2 border-bottom d-flex justify-content-between align-items-center">
-                        <div>
-                            <span class="text-muted small">Selected: <span id="selectedCount">0</span></span>
-                        </div>
-                        <div class="btn-group btn-group-sm">
-                            <button type="button" class="btn btn-outline-warning" onclick="openHoldModal()">
-                                <i class="bi bi-pause-circle me-1"></i>Hold
-                            </button>
-                            <button type="button" class="btn btn-outline-success" onclick="openReleaseModal()">
-                                <i class="bi bi-play-circle me-1"></i>Release
-                            </button>
-                            <button type="button" class="btn btn-outline-info" onclick="openRecalculateModal()">
-                                <i class="bi bi-arrow-repeat me-1"></i>Recalculate
-                            </button>
-                        </div>
-                    </div>
-                    <?php endif; ?>
-                    
-                    <div class="table-responsive">
-                        <table class="table table-hover table-sm mb-0" id="payrollTable">
-                            <thead class="table-light">
-                                <tr>
-                                    <?php if (!in_array($selectedPeriod['status'], ['Frozen', 'Locked'])): ?>
-                                    <th style="width: 30px;">
-                                        <input type="checkbox" class="form-check-input" id="selectAll">
-                                    </th>
-                                    <?php endif; ?>
-                                    <?php if (in_array('employee_code', $selectedColumns)): ?>
-                                    <th>Emp Code</th>
-                                    <?php endif; ?>
-                                    <?php if (in_array('full_name', $selectedColumns)): ?>
-                                    <th>Name</th>
-                                    <?php endif; ?>
-                                    <?php if (in_array('client_unit', $selectedColumns)): ?>
-                                    <th>Client/Unit</th>
-                                    <?php endif; ?>
-                                    <?php if (in_array('paid_days', $selectedColumns)): ?>
-                                    <th class="text-center">Days</th>
-                                    <?php endif; ?>
-                                    <?php if (in_array('basic', $selectedColumns)): ?>
-                                    <th class="text-end">Basic</th>
-                                    <?php endif; ?>
-                                    <?php if (in_array('da', $selectedColumns)): ?>
-                                    <th class="text-end">DA</th>
-                                    <?php endif; ?>
-                                    <?php if (in_array('hra', $selectedColumns)): ?>
-                                    <th class="text-end">HRA</th>
-                                    <?php endif; ?>
-                                    <?php if (in_array('gross', $selectedColumns)): ?>
-                                    <th class="text-end">Gross</th>
-                                    <?php endif; ?>
-                                    <?php if (in_array('pf_emp', $selectedColumns)): ?>
-                                    <th class="text-end">PF (E)</th>
-                                    <?php endif; ?>
-                                    <?php if (in_array('esi_emp', $selectedColumns)): ?>
-                                    <th class="text-end">ESI (E)</th>
-                                    <?php endif; ?>
-                                    <?php if (in_array('pt', $selectedColumns)): ?>
-                                    <th class="text-end">PT</th>
-                                    <?php endif; ?>
-                                    <?php if (in_array('advance', $selectedColumns)): ?>
-                                    <th class="text-end">Adv</th>
-                                    <?php endif; ?>
-                                    <?php if (in_array('deductions', $selectedColumns)): ?>
-                                    <th class="text-end">Ded</th>
-                                    <?php endif; ?>
-                                    <?php if (in_array('net_pay', $selectedColumns)): ?>
-                                    <th class="text-end">Net Pay</th>
-                                    <?php endif; ?>
-                                    <?php if (in_array('ctc', $selectedColumns)): ?>
-                                    <th class="text-end">CTC</th>
-                                    <?php endif; ?>
-                                    <?php if (in_array('status', $selectedColumns)): ?>
-                                    <th>Status</th>
-                                    <?php endif; ?>
-                                    <th style="width: 60px;">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php if (empty($payrollData)): ?>
-                                <tr>
-                                    <td colspan="20" class="text-center py-4 text-muted">
-                                        <?php if ($selectedPeriod['status'] === 'Draft'): ?>
-                                        No payroll data. Click "Process" to generate payroll.
-                                        <?php else: ?>
-                                        No records found matching your filters.
-                                        <?php endif; ?>
-                                    </td>
-                                </tr>
-                                <?php else: ?>
-                                <?php foreach ($payrollData as $row): ?>
-                                <tr class="<?php echo ($row['salary_hold'] ?? 0) ? 'table-warning' : ''; ?>">
-                                    <?php if (!in_array($selectedPeriod['status'], ['Frozen', 'Locked'])): ?>
-                                    <td>
-                                        <input type="checkbox" class="form-check-input row-checkbox" 
-                                               name="employee_codes[]" value="<?php echo $row['employee_id']; ?>">
-                                    </td>
-                                    <?php endif; ?>
-                                    <?php if (in_array('employee_code', $selectedColumns)): ?>
-                                    <td><?php echo sanitize($row['employee_code']); ?></td>
-                                    <?php endif; ?>
-                                    <?php if (in_array('full_name', $selectedColumns)): ?>
-                                    <td>
-                                        <?php echo sanitize($row['full_name']); ?>
-                                        <?php if ($row['salary_hold'] ?? 0): ?>
-                                        <span class="badge bg-warning text-dark ms-1">Hold</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <?php endif; ?>
-                                    <?php if (in_array('client_unit', $selectedColumns)): ?>
-                                    <td>
-                                        <small><?php echo sanitize($row['client_name'] ?? ''); ?></small>
-                                        <?php if ($row['unit_name']): ?>
-                                        <small class="text-muted">/ <?php echo sanitize($row['unit_name']); ?></small>
-                                        <?php endif; ?>
-                                    </td>
-                                    <?php endif; ?>
-                                    <?php if (in_array('paid_days', $selectedColumns)): ?>
-                                    <td class="text-center"><?php echo $row['paid_days'] ?? 0; ?></td>
-                                    <?php endif; ?>
-                                    <?php if (in_array('basic', $selectedColumns)): ?>
-                                    <td class="text-end"><?php echo formatCurrency($row['basic'] ?? 0); ?></td>
-                                    <?php endif; ?>
-                                    <?php if (in_array('da', $selectedColumns)): ?>
-                                    <td class="text-end"><?php echo formatCurrency($row['da'] ?? 0); ?></td>
-                                    <?php endif; ?>
-                                    <?php if (in_array('hra', $selectedColumns)): ?>
-                                    <td class="text-end"><?php echo formatCurrency($row['hra'] ?? 0); ?></td>
-                                    <?php endif; ?>
-                                    <?php if (in_array('gross', $selectedColumns)): ?>
-                                    <td class="text-end"><strong><?php echo formatCurrency($row['gross_earnings'] ?? 0); ?></strong></td>
-                                    <?php endif; ?>
-                                    <?php if (in_array('pf_emp', $selectedColumns)): ?>
-                                    <td class="text-end"><?php echo formatCurrency($row['pf_employee'] ?? 0); ?></td>
-                                    <?php endif; ?>
-                                    <?php if (in_array('esi_emp', $selectedColumns)): ?>
-                                    <td class="text-end"><?php echo formatCurrency($row['esi_employee'] ?? 0); ?></td>
-                                    <?php endif; ?>
-                                    <?php if (in_array('pt', $selectedColumns)): ?>
-                                    <td class="text-end"><?php echo formatCurrency($row['professional_tax'] ?? 0); ?></td>
-                                    <?php endif; ?>
-                                    <?php if (in_array('advance', $selectedColumns)): ?>
-                                    <td class="text-end"><?php echo formatCurrency($row['salary_advance'] ?? 0); ?></td>
-                                    <?php endif; ?>
-                                    <?php if (in_array('deductions', $selectedColumns)): ?>
-                                    <td class="text-end text-danger"><?php echo formatCurrency($row['total_deductions'] ?? 0); ?></td>
-                                    <?php endif; ?>
-                                    <?php if (in_array('net_pay', $selectedColumns)): ?>
-                                    <td class="text-end"><strong class="text-success"><?php echo formatCurrency($row['net_pay'] ?? 0); ?></strong></td>
-                                    <?php endif; ?>
-                                    <?php if (in_array('ctc', $selectedColumns)): ?>
-                                    <td class="text-end"><?php echo formatCurrency($row['ctc'] ?? 0); ?></td>
-                                    <?php endif; ?>
-                                    <?php if (in_array('status', $selectedColumns)): ?>
-                                    <td>
-                                        <span class="badge bg-<?php 
-                                            echo ($row['status'] ?? '') === 'Processed' ? 'info' : 
-                                                (($row['status'] ?? '') === 'Hold' ? 'warning text-dark' : 
-                                                (($row['status'] ?? '') === 'Approved' ? 'success' : 
-                                                (($row['status'] ?? '') === 'Paid' ? 'primary' : 'secondary')));
-                                        ?>"><?php echo sanitize($row['status'] ?? 'Draft'); ?></span>
-                                        <?php if ($row['payroll_dirty'] ?? 0): ?>
-                                        <span class="badge bg-info" title="Needs recalculation">!</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <?php endif; ?>
-                                    <td>
-                                        <a href="index.php?page=payroll/view&id=<?php echo $row['id']; ?>" 
-                                           class="btn btn-sm btn-outline-primary" title="View Details">
-                                            <i class="bi bi-eye"></i>
-                                        </a>
-                                    </td>
-                                </tr>
-                                <?php endforeach; ?>
-                                <?php endif; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </form>
-            </div>
-        </div>
         
         <?php endif; ?>
-    </div>
-</div>
-
-<!-- Process Modal -->
-<div class="modal fade" id="processModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="POST">
-                <input type="hidden" name="period_id" value="<?php echo $selectedPeriod['id'] ?? ''; ?>">
-                <div class="modal-header">
-                    <h5 class="modal-title">Process Payroll</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <p>Process payroll for <strong><?php echo sanitize($selectedPeriod['period_name'] ?? ''); ?></strong>?</p>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Client (Optional)</label>
-                        <select name="process_client_id" class="form-select" id="processClient">
-                            <option value="">All Clients</option>
-                            <?php foreach ($clients as $c): ?>
-                            <option value="<?php echo $c['id']; ?>"><?php echo sanitize($c['name']); ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Unit (Optional)</label>
-                        <select name="process_unit_id" class="form-select" id="processUnit">
-                            <option value="">All Units</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" name="process_payroll" class="btn btn-primary">
-                        <i class="bi bi-play-fill me-1"></i>Process Payroll
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- Hold Modal -->
-<div class="modal fade" id="holdModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="POST" id="holdForm">
-                <input type="hidden" name="period_id" value="<?php echo $selectedPeriod['id'] ?? ''; ?>">
-                <div class="modal-header">
-                    <h5 class="modal-title">Hold Salary</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">Reason for Hold</label>
-                        <textarea name="hold_reason" class="form-control" rows="2" required></textarea>
-                    </div>
-                    <div id="holdEmployeesList"></div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" name="hold_salary" class="btn btn-warning">
-                        <i class="bi bi-pause-circle me-1"></i>Hold Salary
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- Release Modal -->
-<div class="modal fade" id="releaseModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="POST" id="releaseForm">
-                <input type="hidden" name="period_id" value="<?php echo $selectedPeriod['id'] ?? ''; ?>">
-                <div class="modal-header">
-                    <h5 class="modal-title">Release Salary</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <p>Release held salary for selected employees?</p>
-                    <div id="releaseEmployeesList"></div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" name="release_salary" class="btn btn-success">
-                        <i class="bi bi-play-circle me-1"></i>Release Salary
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- Recalculate Modal -->
-<div class="modal fade" id="recalculateModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="POST" id="recalculateForm">
-                <input type="hidden" name="period_id" value="<?php echo $selectedPeriod['id'] ?? ''; ?>">
-                <div class="modal-header">
-                    <h5 class="modal-title">Recalculate Payroll</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <p>Recalculate payroll for selected employees?</p>
-                    <div id="recalculateEmployeesList"></div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" name="recalculate_payroll" class="btn btn-info">
-                        <i class="bi bi-arrow-repeat me-1"></i>Recalculate
-                    </button>
-                </div>
-            </form>
-        </div>
     </div>
 </div>
 
 <script>
-var allUnits = <?php echo $allUnitsJson; ?>;
-
-$(document).ready(function() {
-    // Select all checkbox
-    $('#selectAll').on('change', function() {
-        $('.row-checkbox').prop('checked', this.checked);
-        updateSelectedCount();
-    });
-    
-    // Row checkbox change
-    $(document).on('change', '.row-checkbox', function() {
-        updateSelectedCount();
-    });
-    
-    // Column visibility toggle
-    $('.column-toggle').on('change', function() {
-        var columns = [];
-        $('.column-toggle:checked').each(function() {
-            columns.push($(this).data('column'));
-        });
-        document.cookie = 'payroll_columns=' + JSON.stringify(columns) + ';path=/;max-age=31536000';
-        location.reload();
-    });
-    
-    // Process client filter
-    $('#processClient').on('change', function() {
-        var clientId = $(this).val();
-        var $unitSelect = $('#processUnit');
-        $unitSelect.find('option:not(:first)').remove();
-        
-        allUnits.forEach(function(unit) {
-            if (!clientId || unit.client_id == clientId) {
-                $unitSelect.append('<option value="' + unit.id + '">' + unit.name + '</option>');
-            }
-        });
-    });
-    
-    // Filter units dropdown
-    if ($('#filterClient').val()) {
-        filterUnitsDropdown();
-    }
-});
-
-function updateSelectedCount() {
-    var count = $('.row-checkbox:checked').length;
-    $('#selectedCount').text(count);
-}
+var allUnits = <?php echo json_encode($allUnits); ?>;
 
 function filterUnitsDropdown() {
     var clientId = $('#filterClient').val();
     var $unitSelect = $('#filterUnit');
-    var currentVal = $unitSelect.val();
-    
     $unitSelect.find('option:not(:first)').remove();
     
     allUnits.forEach(function(unit) {
         if (!clientId || unit.client_id == clientId) {
-            var selected = unit.id == currentVal ? ' selected' : '';
-            $unitSelect.append('<option value="' + unit.id + '"' + selected + '>' + unit.name + '</option>');
+            $unitSelect.append('<option value="' + unit.id + '">' + unit.name + '</option>');
         }
     });
 }
 
-function openHoldModal() {
-    var selected = [];
-    $('.row-checkbox:checked').each(function() {
-        selected.push($(this).val());
+var editMode = false;
+
+function toggleEditMode() {
+    editMode = !editMode;
+    $('.editable-cell').each(function() {
+        var $cell = $(this);
+        var field = $cell.data('field');
+        var value = parseFloat($cell.text().replace(/[₹,]/g, '')) || 0;
+        
+        if (editMode) {
+            $cell.html('<input type="number" class="form-control form-control-sm text-end salary-input" ' +
+                       'step="0.01" value="' + value + '" data-field="' + field + '" style="width: 100px;">');
+        } else {
+            $cell.text('₹' + value.toLocaleString('en-IN', {minimumFractionDigits: 2}));
+        }
     });
     
-    if (selected.length === 0) {
-        alert('Please select at least one employee.');
-        return;
+    if (editMode) {
+        $('#payrollTable').find('thead tr').append('<th>Action</th>');
+        $('#payrollTable tbody tr').each(function() {
+            var $row = $(this);
+            var empCode = $row.data('emp-code');
+            $row.append('<td><button class="btn btn-sm btn-success save-row" data-emp="' + empCode + '"><i class="bi bi-check"></i></button></td>');
+        });
+    } else {
+        $('#payrollTable th:last-child, #payrollTable td:last-child').remove();
     }
-    
-    var html = '<input type="hidden" name="hold_employees[]" value="' + selected.join(',') + '">';
-    html += '<p class="text-muted">' + selected.length + ' employee(s) selected</p>';
-    $('#holdEmployeesList').html(html);
-    
-    var modal = new bootstrap.Modal(document.getElementById('holdModal'));
-    modal.show();
 }
 
-function openReleaseModal() {
-    var selected = [];
-    $('.row-checkbox:checked').each(function() {
-        selected.push($(this).val());
+$(document).on('input', '.salary-input', function() {
+    // Recalculate row totals
+    var $row = $(this).closest('tr');
+    var gross = 0;
+    $row.find('.salary-input').each(function() {
+        gross += parseFloat($(this).val()) || 0;
     });
     
-    if (selected.length === 0) {
-        alert('Please select at least one employee.');
-        return;
-    }
+    $row.find('.gross-display').text('₹' + gross.toLocaleString('en-IN', {minimumFractionDigits: 2}));
     
-    var html = '<input type="hidden" name="release_employees[]" value="' + selected.join(',') + '">';
-    html += '<p class="text-muted">' + selected.length + ' employee(s) selected</p>';
-    $('#releaseEmployeesList').html(html);
-    
-    var modal = new bootstrap.Modal(document.getElementById('releaseModal'));
-    modal.show();
-}
+    // Simple net calculation (gross - deductions)
+    var ded = parseFloat($row.find('.text-danger').text().replace(/[₹,]/g, '')) || 0;
+    var net = gross - ded;
+    $row.find('.net-display').text('₹' + net.toLocaleString('en-IN', {minimumFractionDigits: 2}));
+});
 
-function openRecalculateModal() {
-    var selected = [];
-    $('.row-checkbox:checked').each(function() {
-        selected.push($(this).val());
+$(document).on('click', '.save-row', function() {
+    var empCode = $(this).data('emp');
+    var $row = $(this).closest('tr');
+    
+    var data = {
+        period_id: <?php echo $selectedPeriod['id'] ?? 0; ?>,
+        emp_code: empCode,
+        basic_da: $row.find('[data-field="basic_da"]').val(),
+        hra: $row.find('[data-field="hra"]').val(),
+        lww: $row.find('[data-field="lww"]').val(),
+        bonus: $row.find('[data-field="bonus"]').val(),
+        washing: $row.find('[data-field="washing"]').val(),
+        other: $row.find('[data-field="other"]').val()
+    };
+    
+    // AJAX call to update
+    $.post('index.php?page=api/payroll-update', data, function(res) {
+        if (res.success) {
+            alert('Saved!');
+        } else {
+            alert('Error: ' + (res.message || 'Unknown error'));
+        }
     });
-    
-    if (selected.length === 0) {
-        alert('Please select at least one employee.');
-        return;
-    }
-    
-    var html = '<input type="hidden" name="employee_codes[]" value="' + selected.join(',') + '">';
-    html += '<p class="text-muted">' + selected.length + ' employee(s) selected</p>';
-    $('#recalculateEmployeesList').html(html);
-    
-    var modal = new bootstrap.Modal(document.getElementById('recalculateModal'));
-    modal.show();
-}
+});
 </script>

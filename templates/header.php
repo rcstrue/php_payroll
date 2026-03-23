@@ -353,6 +353,21 @@
                 </li>
                 <?php endif; ?>
                 
+                <!-- Bulk Upload -->
+                <?php if (in_array($_SESSION['role_code'] ?? '', ['admin', 'hr_executive'])): ?>
+                <li class="sidebar-item has-submenu <?php echo strpos($page, 'bulk-upload') === 0 ? 'open' : ''; ?>">
+                    <a href="#" class="sidebar-link">
+                        <i class="bi bi-cloud-arrow-up"></i>
+                        <span>Bulk Upload</span>
+                        <i class="bi bi-chevron-down sidebar-arrow"></i>
+                    </a>
+                    <ul class="sidebar-submenu">
+                        <li><a href="index.php?page=bulk-upload/salary" class="<?php echo $page == 'bulk-upload/salary' ? 'active' : ''; ?>">Salary Upload</a></li>
+                        <li><a href="index.php?page=attendance/upload" class="<?php echo $page == 'attendance/upload' ? 'active' : ''; ?>">Attendance Upload</a></li>
+                    </ul>
+                </li>
+                <?php endif; ?>
+                
                 <!-- Timesheets -->
                 <?php if (showMenu($auth, 'timesheet')): ?>
                 <li class="sidebar-item has-submenu <?php echo strpos($page, 'timesheet') === 0 ? 'open' : ''; ?>">
