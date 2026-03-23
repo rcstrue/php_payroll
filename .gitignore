@@ -1,0 +1,64 @@
+# Configuration with sensitive data
+config/config.local.php
+
+# Uploads directory - user generated content
+uploads/*
+!uploads/.gitkeep
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Package files
+*.zip
+*.tar.gz
+
+# PHP errors
+php_errors.log
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Next.js / Node.js files (not used in this PHP project)
+node_modules/
+.next/
+out/
+build/
+dist/
+package.json
+package-lock.json
+bun.lock
+yarn.lock
+tsconfig.json
+tailwind.config.ts
+postcss.config.mjs
+next.config.ts
+next.config.mjs
+eslint.config.mjs
+components.json
+prisma/
+src/
+public/
+examples/
+db/*.db
+.accesslog
+.config
+.stats

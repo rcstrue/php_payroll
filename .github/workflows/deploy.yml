@@ -1,0 +1,82 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  deploy:
+    name: Deploy to Server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate version info
+        run: |
+          echo "Version: 2.1.3" > build-info.txt
+          echo "Last Update: $(TZ='Asia/Kolkata' date '+%d %b %Y %H:%M IST')" >> build-info.txt
+
+      # Composer Cache - speeds up builds by caching vendor folder
+      - name: Get Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ steps.composer-cache.outputs.dir }}
+            vendor
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
+
+      # Check if composer.json/composer.lock exists and install if needed
+      - name: Check Composer files
+        id: composer-check
+        run: |
+          if [ -f "composer.json" ]; then
+            echo "has_composer=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_composer=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install Composer dependencies
+        if: steps.composer-check.outputs.has_composer == 'true'
+        run: composer install --no-interaction --prefer-dist --no-dev --optimize-autoloader
+
+      - name: Deploy via FTP
+        uses: SamKirkland/FTP-Deploy-Action@4.3.0
+        with:
+          server: ${{ secrets.FTP_HOST }}
+          username: ${{ secrets.FTP_USER }}
+          password: ${{ secrets.FTP_PASS }}
+          server-dir: /hrms/
+          local-dir: ./
+          exclude: |
+            .git/**
+            .git-rewrite/**
+            .github/**
+            .gitignore
+            .gitattributes
+            node_modules/**
+            **/*.md
+            database/*.sql
+            database/**
+            install/**
+            config/config.local.php
+            upload/**
+            skills/**
+            .next/**
+            next-env.d.ts
+            package.json
+            package-lock.json
+            sonar-issues.json
+            sonarcloud_issues.json
