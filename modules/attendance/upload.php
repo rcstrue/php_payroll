@@ -1,12 +1,12 @@
 <?php
 /**
  * RCS HRMS Pro - Monthly Attendance Upload
- * Bulk upload monthly attendance summary (not daily attendance)
+ * Bulk upload monthly attendance summary with advance deductions
  */
 
 $pageTitle = 'Upload Monthly Attendance';
 
-// Ensure attendance_summary table exists
+// Ensure attendance_summary table exists with all columns
 try {
     $db->exec("CREATE TABLE IF NOT EXISTS `attendance_summary` (
         `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -18,6 +18,10 @@ try {
         `total_extra` decimal(5,2) DEFAULT 0.00,
         `overtime_hours` decimal(6,2) DEFAULT 0.00,
         `total_wo` int(3) DEFAULT 0,
+        `adv1` decimal(10,2) DEFAULT 0.00,
+        `adv2` decimal(10,2) DEFAULT 0.00,
+        `office_adv` decimal(10,2) DEFAULT 0.00,
+        `dress_adv` decimal(10,2) DEFAULT 0.00,
         `source` enum('Manual','Excel Upload') DEFAULT 'Manual',
         `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
         `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
@@ -25,6 +29,16 @@ try {
         UNIQUE KEY `uniq_emp_month_year` (`employee_id`, `month`, `year`),
         KEY `idx_unit_month_year` (`unit_id`, `month`, `year`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    
+    // Add advance columns if they don't exist
+    $columns = $db->query("SHOW COLUMNS FROM attendance_summary LIKE 'adv1'")->fetch();
+    if (!$columns) {
+        $db->exec("ALTER TABLE attendance_summary 
+                   ADD COLUMN `adv1` decimal(10,2) DEFAULT 0.00 AFTER total_wo,
+                   ADD COLUMN `adv2` decimal(10,2) DEFAULT 0.00 AFTER adv1,
+                   ADD COLUMN `office_adv` decimal(10,2) DEFAULT 0.00 AFTER adv2,
+                   ADD COLUMN `dress_adv` decimal(10,2) DEFAULT 0.00 AFTER office_adv");
+    }
 } catch (Exception $e) {
     // Table creation failed
 }
@@ -95,6 +109,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['attendance_file'])) 
                             $totalExtra = isset($row[2]) ? (float)$row[2] : 0;
                             $otHours = isset($row[3]) ? (float)$row[3] : 0;
                             $totalWO = isset($row[4]) ? (int)$row[4] : 0;
+                            $adv1 = isset($row[5]) ? (float)$row[5] : 0;
+                            $adv2 = isset($row[6]) ? (float)$row[6] : 0;
+                            $officeAdv = isset($row[7]) ? (float)$row[7] : 0;
+                            $dressAdv = isset($row[8]) ? (float)$row[8] : 0;
                             
                             // Get employee ID
                             $empStmt = $db->prepare("SELECT id FROM employees WHERE employee_code = ? AND unit_id = ?");
@@ -105,16 +123,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['attendance_file'])) 
                                 // Insert or update attendance summary
                                 $insertStmt = $db->prepare(
                                     "INSERT INTO attendance_summary 
-                                    (employee_id, unit_id, month, year, total_present, total_extra, overtime_hours, total_wo, source)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Excel Upload')
+                                    (employee_id, unit_id, month, year, total_present, total_extra, overtime_hours, total_wo, adv1, adv2, office_adv, dress_adv, source)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Excel Upload')
                                     ON DUPLICATE KEY UPDATE 
                                         total_present = VALUES(total_present),
                                         total_extra = VALUES(total_extra),
                                         overtime_hours = VALUES(overtime_hours),
                                         total_wo = VALUES(total_wo),
+                                        adv1 = VALUES(adv1),
+                                        adv2 = VALUES(adv2),
+                                        office_adv = VALUES(office_adv),
+                                        dress_adv = VALUES(dress_adv),
                                         source = 'Excel Upload'"
                                 );
-                                $insertStmt->execute([$emp['id'], $unitId, $month, $year, $totalPresent, $totalExtra, $otHours, $totalWO]);
+                                $insertStmt->execute([$emp['id'], $unitId, $month, $year, $totalPresent, $totalExtra, $otHours, $totalWO, $adv1, $adv2, $officeAdv, $dressAdv]);
                                 $imported++;
                             } else {
                                 $skipped++;
@@ -135,6 +157,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['attendance_file'])) 
                                 $totalExtra = isset($row[2]) ? (float)$row[2] : 0;
                                 $otHours = isset($row[3]) ? (float)$row[3] : 0;
                                 $totalWO = isset($row[4]) ? (int)$row[4] : 0;
+                                $adv1 = isset($row[5]) ? (float)$row[5] : 0;
+                                $adv2 = isset($row[6]) ? (float)$row[6] : 0;
+                                $officeAdv = isset($row[7]) ? (float)$row[7] : 0;
+                                $dressAdv = isset($row[8]) ? (float)$row[8] : 0;
                                 
                                 // Get employee ID
                                 $empStmt = $db->prepare("SELECT id FROM employees WHERE employee_code = ? AND unit_id = ?");
@@ -145,16 +171,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['attendance_file'])) 
                                     // Insert or update attendance summary
                                     $insertStmt = $db->prepare(
                                         "INSERT INTO attendance_summary 
-                                        (employee_id, unit_id, month, year, total_present, total_extra, overtime_hours, total_wo, source)
-                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Excel Upload')
+                                        (employee_id, unit_id, month, year, total_present, total_extra, overtime_hours, total_wo, adv1, adv2, office_adv, dress_adv, source)
+                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Excel Upload')
                                         ON DUPLICATE KEY UPDATE 
                                             total_present = VALUES(total_present),
                                             total_extra = VALUES(total_extra),
                                             overtime_hours = VALUES(overtime_hours),
                                             total_wo = VALUES(total_wo),
+                                            adv1 = VALUES(adv1),
+                                            adv2 = VALUES(adv2),
+                                            office_adv = VALUES(office_adv),
+                                            dress_adv = VALUES(dress_adv),
                                             source = 'Excel Upload'"
                                     );
-                                    $insertStmt->execute([$emp['id'], $unitId, $month, $year, $totalPresent, $totalExtra, $otHours, $totalWO]);
+                                    $insertStmt->execute([$emp['id'], $unitId, $month, $year, $totalPresent, $totalExtra, $otHours, $totalWO, $adv1, $adv2, $officeAdv, $dressAdv]);
                                     $imported++;
                                 } else {
                                     $skipped++;
@@ -192,6 +222,10 @@ try {
         "SELECT s.unit_id, s.month, s.year, s.source, s.updated_at,
                 COUNT(DISTINCT s.employee_id) as employee_count,
                 SUM(s.total_present) as total_present,
+                SUM(s.adv1) as total_adv1,
+                SUM(s.adv2) as total_adv2,
+                SUM(s.office_adv) as total_office_adv,
+                SUM(s.dress_adv) as total_dress_adv,
                 u.name as unit_name, c.name as client_name
          FROM attendance_summary s
          LEFT JOIN units u ON s.unit_id = u.id
@@ -214,7 +248,7 @@ try {
                 <div class="alert alert-info mb-4">
                     <i class="bi bi-info-circle me-2"></i>
                     <strong>Monthly Attendance Upload:</strong> Upload employee attendance summary for the entire month at once. 
-                    This is NOT daily attendance - it's the monthly totals.
+                    This includes attendance data and advance deductions.
                 </div>
                 
                 <form method="POST" enctype="multipart/form-data" class="needs-validation" novalidate id="uploadForm">
@@ -278,7 +312,7 @@ try {
                             <input type="file" class="form-control" name="attendance_file" 
                                    accept=".xlsx,.xls,.csv" required>
                             <div class="form-text">
-                                Upload Excel (.xlsx, .xls) or CSV file with columns: <strong>Emp Code, Present Days, Extra Days, OT Hours, WO Days</strong>
+                                Upload Excel (.xlsx, .xls) or CSV file. <a href="#" onclick="downloadTemplate()"><i class="bi bi-download me-1"></i>Download Excel Template</a>
                             </div>
                         </div>
                         
@@ -298,59 +332,81 @@ try {
     
     <div class="col-lg-4">
         <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0"><i class="bi bi-file-earmark-spreadsheet me-2"></i>File Format</h5>
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0"><i class="bi bi-file-earmark-spreadsheet me-2"></i>Excel Format</h5>
             </div>
             <div class="card-body">
-                <p class="text-muted small mb-2">Monthly attendance file format:</p>
-                <table class="table table-sm table-bordered">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Emp Code</th>
-                            <th>Present</th>
-                            <th>Extra</th>
-                            <th>OT Hrs</th>
-                            <th>WO</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>EMP001</td>
-                            <td>26</td>
-                            <td>2</td>
-                            <td>8</td>
-                            <td>4</td>
-                        </tr>
-                        <tr>
-                            <td>EMP002</td>
-                            <td>25</td>
-                            <td>0</td>
-                            <td>4</td>
-                            <td>4</td>
-                        </tr>
-                        <tr>
-                            <td>EMP003</td>
-                            <td>24.5</td>
-                            <td>1</td>
-                            <td>0</td>
-                            <td>4</td>
-                        </tr>
-                    </tbody>
-                </table>
+                <p class="text-muted small mb-2">Monthly attendance file columns:</p>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Emp Code</th>
+                                <th>Present Days</th>
+                                <th>Extra Days</th>
+                                <th>OT Hours</th>
+                                <th>WO Days</th>
+                                <th>Adv 1</th>
+                                <th>Adv 2</th>
+                                <th>Office Adv</th>
+                                <th>Dress Adv</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>EMP001</td>
+                                <td>26</td>
+                                <td>2</td>
+                                <td>8</td>
+                                <td>4</td>
+                                <td>500</td>
+                                <td>0</td>
+                                <td>1000</td>
+                                <td>200</td>
+                            </tr>
+                            <tr>
+                                <td>EMP002</td>
+                                <td>25</td>
+                                <td>0</td>
+                                <td>4</td>
+                                <td>4</td>
+                                <td>0</td>
+                                <td>1000</td>
+                                <td>0</td>
+                                <td>0</td>
+                            </tr>
+                            <tr>
+                                <td>EMP003</td>
+                                <td>24.5</td>
+                                <td>1</td>
+                                <td>0</td>
+                                <td>4</td>
+                                <td>500</td>
+                                <td>500</td>
+                                <td>500</td>
+                                <td>300</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
                 
                 <h6 class="mt-3">Column Details:</h6>
-                <ul class="list-unstyled small">
+                <ul class="list-unstyled small text-muted">
                     <li><strong>Emp Code</strong> - Employee Code (must match system)</li>
-                    <li><strong>Present</strong> - Total present days (can be decimal like 24.5)</li>
-                    <li><strong>Extra</strong> - Extra/Overtime days worked</li>
-                    <li><strong>OT Hrs</strong> - Overtime hours</li>
-                    <li><strong>WO</strong> - Weekly Off days</li>
+                    <li><strong>Present Days</strong> - Total present days (can be decimal like 24.5)</li>
+                    <li><strong>Extra Days</strong> - Extra/Overtime days worked</li>
+                    <li><strong>OT Hours</strong> - Overtime hours</li>
+                    <li><strong>WO Days</strong> - Weekly Off days</li>
+                    <li><strong>Adv 1</strong> - Advance 1 deduction amount</li>
+                    <li><strong>Adv 2</strong> - Advance 2 deduction amount</li>
+                    <li><strong>Office Adv</strong> - Office advance deduction</li>
+                    <li><strong>Dress Adv</strong> - Dress advance deduction</li>
                 </ul>
                 
-                <div class="mt-3">
-                    <a href="#" class="btn btn-outline-primary btn-sm" onclick="downloadTemplate()">
-                        <i class="bi bi-download me-1"></i>Download Template
-                    </a>
+                <div class="d-grid gap-2 mt-3">
+                    <button type="button" class="btn btn-success" onclick="downloadTemplate()">
+                        <i class="bi bi-file-earmark-excel me-1"></i>Download Excel Template
+                    </button>
                 </div>
             </div>
         </div>
@@ -364,7 +420,8 @@ try {
                     <li>Employees must already exist in the selected unit</li>
                     <li>Uploading again for same month will overwrite existing data</li>
                     <li>Present days can include half days (e.g., 24.5)</li>
-                    <li>This data will be used for payroll calculation</li>
+                    <li>Advance amounts will be deducted from salary</li>
+                    <li>Leave advance columns blank or 0 if not applicable</li>
                 </ul>
             </div>
         </div>
@@ -387,23 +444,28 @@ try {
                                 <th>Unit</th>
                                 <th>Month/Year</th>
                                 <th>Employees</th>
-                                <th>Total Present</th>
+                                <th>Present Days</th>
+                                <th>Total Advances</th>
                                 <th>Uploaded On</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php if (empty($recentUploads)): ?>
                             <tr>
-                                <td colspan="6" class="text-center py-4 text-muted">No uploads yet</td>
+                                <td colspan="7" class="text-center py-4 text-muted">No uploads yet</td>
                             </tr>
                             <?php else: ?>
-                            <?php foreach ($recentUploads as $upload): ?>
+                            <?php foreach ($recentUploads as $upload): 
+                                $totalAdv = ($upload['total_adv1'] ?? 0) + ($upload['total_adv2'] ?? 0) + 
+                                            ($upload['total_office_adv'] ?? 0) + ($upload['total_dress_adv'] ?? 0);
+                            ?>
                             <tr>
                                 <td><?php echo sanitize($upload['client_name'] ?? '-'); ?></td>
                                 <td><?php echo sanitize($upload['unit_name'] ?? '-'); ?></td>
                                 <td><?php echo date('F Y', mktime(0, 0, 0, $upload['month'], 1, $upload['year'])); ?></td>
                                 <td><?php echo number_format($upload['employee_count']); ?></td>
                                 <td><?php echo number_format($upload['total_present'], 1); ?> days</td>
+                                <td>₹<?php echo number_format($totalAdv, 2); ?></td>
                                 <td><?php echo formatDate($upload['updated_at'], 'd-m-Y H:i'); ?></td>
                             </tr>
                             <?php endforeach; ?>
@@ -447,11 +509,11 @@ function loadUnits() {
 }
 
 function downloadTemplate() {
-    // Create CSV content
-    let csv = 'Emp Code,Present Days,Extra Days,OT Hours,WO Days\n';
-    csv += 'EMP001,26,2,8,4\n';
-    csv += 'EMP002,25,0,4,4\n';
-    csv += 'EMP003,24.5,1,0,4\n';
+    // Create CSV content with all columns
+    let csv = 'Emp Code,Present Days,Extra Days,OT Hours,WO Days,Adv 1,Adv 2,Office Adv,Dress Adv\n';
+    csv += 'EMP001,26,2,8,4,500,0,1000,200\n';
+    csv += 'EMP002,25,0,4,4,0,1000,0,0\n';
+    csv += 'EMP003,24.5,1,0,4,500,500,500,300\n';
     
     // Create download
     const blob = new Blob([csv], { type: 'text/csv' });
