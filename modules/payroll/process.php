@@ -979,11 +979,8 @@ $allUnitsJson = json_encode($allUnits);
     </div>
 </div>
 
-<?php
-$allUnitsJs = json_encode($allUnits);
-$inlineJS = "
 <script>
-const allUnits = $allUnitsJs;
+const allUnits = <?php echo json_encode($allUnits); ?>;
 
 // Filter units dropdown based on selected client
 function filterUnitsDropdown() {
@@ -991,7 +988,7 @@ function filterUnitsDropdown() {
     const unitSelect = document.getElementById('filterUnit');
     const currentUnit = unitSelect.value;
     
-    unitSelect.innerHTML = '<option value=\"\">All Units</option>';
+    unitSelect.innerHTML = '<option value="">All Units</option>';
     
     allUnits.forEach(function(unit) {
         if (!clientId || unit.client_id == clientId) {
@@ -1011,7 +1008,7 @@ function filterProcessUnits() {
     const clientId = document.getElementById('processClient').value;
     const unitSelect = document.getElementById('processUnit');
     
-    unitSelect.innerHTML = '<option value=\"\">All Units</option>';
+    unitSelect.innerHTML = '<option value="">All Units</option>';
     
     allUnits.forEach(function(unit) {
         if (!clientId || unit.client_id == clientId) {
@@ -1075,7 +1072,7 @@ function getSelectedEmployees() {
 // View payroll detail
 function viewPayrollDetail(employeeId, periodId) {
     const modal = new bootstrap.Modal(document.getElementById('detailModal'));
-    document.getElementById('detailContent').innerHTML = '<div class=\"text-center py-4\"><div class=\"spinner-border text-primary\"></div></div>';
+    document.getElementById('detailContent').innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
     modal.show();
     
     fetch('index.php?page=payroll/view&action=detail&employee_id=' + employeeId + '&period_id=' + periodId)
@@ -1084,7 +1081,7 @@ function viewPayrollDetail(employeeId, periodId) {
             document.getElementById('detailContent').innerHTML = html;
         })
         .catch(() => {
-            document.getElementById('detailContent').innerHTML = '<div class=\"alert alert-danger\">Failed to load details</div>';
+            document.getElementById('detailContent').innerHTML = '<div class="alert alert-danger">Failed to load details</div>';
         });
 }
 
@@ -1111,5 +1108,3 @@ document.addEventListener('DOMContentLoaded', function() {
     filterUnitsDropdown();
 });
 </script>
-";
-?>
