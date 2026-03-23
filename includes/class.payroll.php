@@ -250,6 +250,16 @@ class Payroll {
             return ['success' => false, 'message' => 'Payroll period is frozen. Cannot process.'];
         }
 
+        // Ensure payroll table has extra_days_amount column
+        try {
+            $checkColumn = $this->db->fetch("SHOW COLUMNS FROM payroll LIKE 'extra_days_amount'");
+            if (!$checkColumn) {
+                $this->db->exec("ALTER TABLE payroll ADD COLUMN extra_days_amount DECIMAL(10,2) DEFAULT 0.00 AFTER overtime_amount");
+            }
+        } catch (Exception $e) {
+            // Column might already exist or table might not have records
+        }
+
         // Build employee query with filters
         $sql = "SELECT e.id, e.employee_code, e.full_name, e.date_of_joining,
                        e.date_of_leaving, e.client_id, e.unit_id, e.worker_category,
@@ -360,15 +370,21 @@ class Payroll {
                     );
 
                     $totalDays = $period['pay_days'] ?? 30;
+                    $extraDaysWorked = floatval($attendance['total_extra'] ?? 0);
+                    
                     // attendance_summary has total_present which includes worked days
-                    $paidDays = floatval($attendance['total_present'] ?? $totalDays);
+                    $paidDays = floatval($attendance['total_present'] ?? 0);
                     // Add weekly offs to paid days
                     $paidDays += floatval($attendance['weekly_offs'] ?? 0);
+                    
+                    // Check if attendance record exists
+                    $hasAttendance = $attendance !== false && ($attendance['total_present'] !== null);
 
                     // Check for missing attendance
-                    if ($paidDays == 0) {
+                    if (!$hasAttendance) {
                         // Assume full month if no attendance data
                         $paidDays = $totalDays;
+                        $extraDaysWorked = 0;
                         // Log this as potential exception but don't block processing
                         $exceptions[] = [
                             'employee_id' => $emp['employee_code'],
@@ -392,6 +408,13 @@ class Payroll {
 
                     $grossEarnings = $basic + $da + $hra + $conveyance + $medicalAllowance + $specialAllowance + $otherAllowance;
 
+                    // Calculate extra days payment (extra days worked beyond normal days)
+                    $extraDaysAmount = 0;
+                    if ($extraDaysWorked > 0) {
+                        $dailyRate = ($emp['basic_wage'] + $emp['da'] + $emp['hra']) / $totalDays;
+                        $extraDaysAmount = round($dailyRate * $extraDaysWorked, 2);
+                    }
+
                     // Calculate overtime amount (based on basic+da per hour * 2)
                     $overtimeAmount = 0;
                     if ($overtimeHours > 0 && ($emp['overtime_applicable'] ?? 0)) {
@@ -399,7 +422,7 @@ class Payroll {
                         $overtimeAmount = round($hourlyRate * $overtimeHours * 2, 2);
                     }
 
-                    $grossWithOT = $grossEarnings + $overtimeAmount;
+                    $grossWithOT = $grossEarnings + $overtimeAmount + $extraDaysAmount;
 
                     // Calculate PF
                     $pfEmployee = 0;
@@ -417,11 +440,12 @@ class Payroll {
                         $epfAdmin = round($pfBase * $this->pfRates['epf_admin'] / 100, 2);
                     }
 
-                    // Calculate ESI
+                    // Calculate ESI - Check against actual gross salary (not pro-rated)
                     $esiEmployee = 0;
                     $esiEmployer = 0;
+                    $actualGrossSalary = floatval($emp['gross_salary'] ?? 0);
 
-                    if (($emp['esi_applicable'] ?? 0) && $grossWithOT <= $this->esiRates['wage_ceiling']) {
+                    if (($emp['esi_applicable'] ?? 0) && $actualGrossSalary <= $this->esiRates['wage_ceiling']) {
                         $esiEmployee = round($grossWithOT * $this->esiRates['employee_share'] / 100, 2);
                         $esiEmployer = round($grossWithOT * $this->esiRates['employer_share'] / 100, 2);
                     }
@@ -481,7 +505,7 @@ class Payroll {
                             payroll_period_id, employee_id, unit_id,
                             total_days, paid_days, unpaid_days, overtime_hours,
                             basic, da, hra, conveyance, medical_allowance, special_allowance, other_allowance,
-                            overtime_amount, gross_earnings,
+                            overtime_amount, extra_days_amount, gross_earnings,
                             pf_employee, esi_employee, professional_tax, lwf_employee,
                             salary_advance, total_deductions,
                             pf_employer, eps_employer, edlis_employer, epf_admin_charges, esi_employer, lwf_employer,
@@ -494,7 +518,7 @@ class Payroll {
                             :period_id, :emp_code, :unit_id,
                             :total_days, :paid_days, :unpaid_days, :ot_hours,
                             :basic, :da, :hra, :conveyance, :medical, :special, :other,
-                            :ot_amount, :gross,
+                            :ot_amount, :extra_days_amount, :gross,
                             :pf_emp, :esi_emp, :pt, :lwf_emp,
                             :salary_adv, :total_ded,
                             :pf_empr, :eps_empr, :edlis_empr, :epf_admin, :esi_empr, :lwf_empr,
@@ -506,7 +530,11 @@ class Payroll {
                         )
                         ON DUPLICATE KEY UPDATE
                             paid_days = VALUES(paid_days),
+                            overtime_hours = VALUES(overtime_hours),
+                            overtime_amount = VALUES(overtime_amount),
+                            extra_days_amount = VALUES(extra_days_amount),
                             gross_earnings = VALUES(gross_earnings),
+                            gross_salary = VALUES(gross_salary),
                             total_deductions = VALUES(total_deductions),
                             net_pay = VALUES(net_pay),
                             ctc = VALUES(ctc),
@@ -531,6 +559,7 @@ class Payroll {
                             'special' => $specialAllowance,
                             'other' => $otherAllowance,
                             'ot_amount' => $overtimeAmount,
+                            'extra_days_amount' => $extraDaysAmount,
                             'gross' => $grossEarnings,
                             'pf_emp' => $pfEmployee,
                             'esi_emp' => $esiEmployee,
@@ -1049,16 +1078,59 @@ class Payroll {
         return $this->db->fetchAll($sql, $params);
     }
 
-    // Calculate Professional Tax (simplified for common states)
-    private function calculatePT($gross) {
-        if ($gross >= 15000) {
+    /**
+     * Calculate Professional Tax (State-wise slabs)
+     * Default slabs - can be overridden based on employee's work state
+     * Common PT slabs across India (monthly)
+     */
+    private function calculatePT($gross, $state = 'MH') {
+        // Maharashtra slabs (most common)
+        if ($state === 'MH' || $state === 'Maharashtra') {
+            if ($gross > 10000) {
+                return 200;  // Fixed ₹200 for salary above ₹10,000
+            }
+            return 0;
+        }
+        
+        // Karnataka slabs
+        if ($state === 'KA' || $state === 'Karnataka') {
+            if ($gross > 15000) {
+                return 200;
+            } elseif ($gross > 10000) {
+                return 150;
+            }
+            return 0;
+        }
+        
+        // Tamil Nadu slabs
+        if ($state === 'TN' || $state === 'Tamil Nadu') {
+            if ($gross > 75000) { // Half yearly threshold
+                return 1250 / 6; // Approx monthly
+            } elseif ($gross > 50000) {
+                return 833 / 6;
+            }
+            return 0;
+        }
+        
+        // Delhi slabs (no PT for most)
+        if ($state === 'DL' || $state === 'Delhi') {
+            if ($gross > 25000) {
+                return 200;
+            }
+            return 0;
+        }
+        
+        // Gujarat slabs
+        if ($state === 'GJ' || $state === 'Gujarat') {
+            if ($gross > 12000) {
+                return 200;
+            }
+            return 0;
+        }
+        
+        // Default: Maharashtra-style slab
+        if ($gross > 10000) {
             return 200;
-        } elseif ($gross >= 12000) {
-            return 150;
-        } elseif ($gross >= 9000) {
-            return 100;
-        } elseif ($gross >= 6000) {
-            return 80;
         }
         return 0;
     }
