@@ -1,12 +1,13 @@
 <?php
 /**
  * RCS HRMS Pro - Monthly Attendance Upload
- * Bulk upload monthly attendance summary with advance deductions
+ * Bulk upload monthly attendance summary
+ * Advances are stored separately in employee_advances table
  */
 
 $pageTitle = 'Upload Monthly Attendance';
 
-// Ensure attendance_summary table exists with all columns
+// Ensure attendance_summary table exists (WITHOUT advance columns)
 try {
     $db->exec("CREATE TABLE IF NOT EXISTS `attendance_summary` (
         `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -18,10 +19,6 @@ try {
         `total_extra` decimal(5,2) DEFAULT 0.00,
         `overtime_hours` decimal(6,2) DEFAULT 0.00,
         `total_wo` int(3) DEFAULT 0,
-        `adv1` decimal(10,2) DEFAULT 0.00,
-        `adv2` decimal(10,2) DEFAULT 0.00,
-        `office_adv` decimal(10,2) DEFAULT 0.00,
-        `dress_adv` decimal(10,2) DEFAULT 0.00,
         `source` enum('Manual','Excel Upload') DEFAULT 'Manual',
         `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
         `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
@@ -29,16 +26,29 @@ try {
         UNIQUE KEY `uniq_emp_month_year` (`employee_id`, `month`, `year`),
         KEY `idx_unit_month_year` (`unit_id`, `month`, `year`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    
-    // Add advance columns if they don't exist
-    $columns = $db->query("SHOW COLUMNS FROM attendance_summary LIKE 'adv1'")->fetch();
-    if (!$columns) {
-        $db->exec("ALTER TABLE attendance_summary 
-                   ADD COLUMN `adv1` decimal(10,2) DEFAULT 0.00 AFTER total_wo,
-                   ADD COLUMN `adv2` decimal(10,2) DEFAULT 0.00 AFTER adv1,
-                   ADD COLUMN `office_adv` decimal(10,2) DEFAULT 0.00 AFTER adv2,
-                   ADD COLUMN `dress_adv` decimal(10,2) DEFAULT 0.00 AFTER office_adv");
-    }
+} catch (Exception $e) {
+    // Table creation failed
+}
+
+// Ensure employee_advances table exists (SEPARATE TABLE)
+try {
+    $db->exec("CREATE TABLE IF NOT EXISTS `employee_advances` (
+        `id` int(11) NOT NULL AUTO_INCREMENT,
+        `employee_id` varchar(36) NOT NULL,
+        `unit_id` int(11) DEFAULT NULL,
+        `month` int(2) NOT NULL,
+        `year` int(4) NOT NULL,
+        `adv1` decimal(10,2) DEFAULT 0.00,
+        `adv2` decimal(10,2) DEFAULT 0.00,
+        `office_advance` decimal(10,2) DEFAULT 0.00,
+        `dress_advance` decimal(10,2) DEFAULT 0.00,
+        `remarks` text DEFAULT NULL,
+        `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+        `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+        PRIMARY KEY (`id`),
+        UNIQUE KEY `uniq_emp_month_year` (`employee_id`, `month`, `year`),
+        KEY `idx_unit_month_year` (`unit_id`, `month`, `year`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 } catch (Exception $e) {
     // Table creation failed
 }
@@ -88,7 +98,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['attendance_file'])) 
             $filePath = $uploadDir . $fileName;
             
             if (move_uploaded_file($file['tmp_name'], $filePath)) {
-                $imported = 0;
+                $attendanceImported = 0;
+                $advanceImported = 0;
                 $errors = [];
                 $skipped = 0;
                 
@@ -120,24 +131,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['attendance_file'])) 
                             $emp = $empStmt->fetch(PDO::FETCH_ASSOC);
                             
                             if ($emp) {
-                                // Insert or update attendance summary
-                                $insertStmt = $db->prepare(
+                                // 1. Insert/Update attendance summary (WITHOUT advances)
+                                $attStmt = $db->prepare(
                                     "INSERT INTO attendance_summary 
-                                    (employee_id, unit_id, month, year, total_present, total_extra, overtime_hours, total_wo, adv1, adv2, office_adv, dress_adv, source)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Excel Upload')
+                                    (employee_id, unit_id, month, year, total_present, total_extra, overtime_hours, total_wo, source)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Excel Upload')
                                     ON DUPLICATE KEY UPDATE 
                                         total_present = VALUES(total_present),
                                         total_extra = VALUES(total_extra),
                                         overtime_hours = VALUES(overtime_hours),
                                         total_wo = VALUES(total_wo),
-                                        adv1 = VALUES(adv1),
-                                        adv2 = VALUES(adv2),
-                                        office_adv = VALUES(office_adv),
-                                        dress_adv = VALUES(dress_adv),
                                         source = 'Excel Upload'"
                                 );
-                                $insertStmt->execute([$emp['id'], $unitId, $month, $year, $totalPresent, $totalExtra, $otHours, $totalWO, $adv1, $adv2, $officeAdv, $dressAdv]);
-                                $imported++;
+                                $attStmt->execute([$emp['id'], $unitId, $month, $year, $totalPresent, $totalExtra, $otHours, $totalWO]);
+                                $attendanceImported++;
+                                
+                                // 2. Insert/Update advances in SEPARATE TABLE
+                                $advStmt = $db->prepare(
+                                    "INSERT INTO employee_advances 
+                                    (employee_id, unit_id, month, year, adv1, adv2, office_advance, dress_advance)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                    ON DUPLICATE KEY UPDATE 
+                                        adv1 = VALUES(adv1),
+                                        adv2 = VALUES(adv2),
+                                        office_advance = VALUES(office_advance),
+                                        dress_advance = VALUES(dress_advance),
+                                        updated_at = CURRENT_TIMESTAMP"
+                                );
+                                $advStmt->execute([$emp['id'], $unitId, $month, $year, $adv1, $adv2, $officeAdv, $dressAdv]);
+                                $advanceImported++;
                             } else {
                                 $skipped++;
                             }
@@ -168,24 +190,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['attendance_file'])) 
                                 $emp = $empStmt->fetch(PDO::FETCH_ASSOC);
                                 
                                 if ($emp) {
-                                    // Insert or update attendance summary
-                                    $insertStmt = $db->prepare(
+                                    // 1. Insert/Update attendance summary (WITHOUT advances)
+                                    $attStmt = $db->prepare(
                                         "INSERT INTO attendance_summary 
-                                        (employee_id, unit_id, month, year, total_present, total_extra, overtime_hours, total_wo, adv1, adv2, office_adv, dress_adv, source)
-                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Excel Upload')
+                                        (employee_id, unit_id, month, year, total_present, total_extra, overtime_hours, total_wo, source)
+                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Excel Upload')
                                         ON DUPLICATE KEY UPDATE 
                                             total_present = VALUES(total_present),
                                             total_extra = VALUES(total_extra),
                                             overtime_hours = VALUES(overtime_hours),
                                             total_wo = VALUES(total_wo),
-                                            adv1 = VALUES(adv1),
-                                            adv2 = VALUES(adv2),
-                                            office_adv = VALUES(office_adv),
-                                            dress_adv = VALUES(dress_adv),
                                             source = 'Excel Upload'"
                                     );
-                                    $insertStmt->execute([$emp['id'], $unitId, $month, $year, $totalPresent, $totalExtra, $otHours, $totalWO, $adv1, $adv2, $officeAdv, $dressAdv]);
-                                    $imported++;
+                                    $attStmt->execute([$emp['id'], $unitId, $month, $year, $totalPresent, $totalExtra, $otHours, $totalWO]);
+                                    $attendanceImported++;
+                                    
+                                    // 2. Insert/Update advances in SEPARATE TABLE
+                                    $advStmt = $db->prepare(
+                                        "INSERT INTO employee_advances 
+                                        (employee_id, unit_id, month, year, adv1, adv2, office_advance, dress_advance)
+                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                        ON DUPLICATE KEY UPDATE 
+                                            adv1 = VALUES(adv1),
+                                            adv2 = VALUES(adv2),
+                                            office_advance = VALUES(office_advance),
+                                            dress_advance = VALUES(dress_advance),
+                                            updated_at = CURRENT_TIMESTAMP"
+                                    );
+                                    $advStmt->execute([$emp['id'], $unitId, $month, $year, $adv1, $adv2, $officeAdv, $dressAdv]);
+                                    $advanceImported++;
                                 } else {
                                     $skipped++;
                                 }
@@ -193,7 +226,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['attendance_file'])) 
                         }
                     }
                     
-                    $message = "Monthly attendance uploaded successfully! Imported: {$imported} employees.";
+                    $message = "Upload successful! Attendance: {$attendanceImported} records, Advances: {$advanceImported} records.";
                     if ($skipped > 0) {
                         $message .= " Skipped: {$skipped} (employee not found in unit)";
                     }
@@ -222,10 +255,6 @@ try {
         "SELECT s.unit_id, s.month, s.year, s.source, s.updated_at,
                 COUNT(DISTINCT s.employee_id) as employee_count,
                 SUM(s.total_present) as total_present,
-                SUM(s.adv1) as total_adv1,
-                SUM(s.adv2) as total_adv2,
-                SUM(s.office_adv) as total_office_adv,
-                SUM(s.dress_adv) as total_dress_adv,
                 u.name as unit_name, c.name as client_name
          FROM attendance_summary s
          LEFT JOIN units u ON s.unit_id = u.id
@@ -247,8 +276,8 @@ try {
             <div class="card-body">
                 <div class="alert alert-info mb-4">
                     <i class="bi bi-info-circle me-2"></i>
-                    <strong>Monthly Attendance Upload:</strong> Upload employee attendance summary for the entire month at once. 
-                    This includes attendance data and advance deductions.
+                    <strong>Monthly Attendance Upload:</strong> Upload employee attendance AND advances for the entire month at once. 
+                    Advances are stored separately in <code>employee_advances</code> table.
                 </div>
                 
                 <form method="POST" enctype="multipart/form-data" class="needs-validation" novalidate id="uploadForm">
@@ -338,7 +367,7 @@ try {
             <div class="card-body">
                 <p class="text-muted small mb-2">Monthly attendance file columns:</p>
                 <div class="table-responsive">
-                    <table class="table table-sm table-bordered table-hover">
+                    <table class="table table-sm table-bordered table-hover" style="font-size: 11px;">
                         <thead class="table-dark">
                             <tr>
                                 <th>Emp Code</th>
@@ -346,10 +375,10 @@ try {
                                 <th>Extra Days</th>
                                 <th>OT Hours</th>
                                 <th>WO Days</th>
-                                <th>Adv 1</th>
-                                <th>Adv 2</th>
-                                <th>Office Adv</th>
-                                <th>Dress Adv</th>
+                                <th class="bg-warning">Adv 1</th>
+                                <th class="bg-warning">Adv 2</th>
+                                <th class="bg-warning">Office Adv</th>
+                                <th class="bg-warning">Dress Adv</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -375,17 +404,6 @@ try {
                                 <td>0</td>
                                 <td>0</td>
                             </tr>
-                            <tr>
-                                <td>EMP003</td>
-                                <td>24.5</td>
-                                <td>1</td>
-                                <td>0</td>
-                                <td>4</td>
-                                <td>500</td>
-                                <td>500</td>
-                                <td>500</td>
-                                <td>300</td>
-                            </tr>
                         </tbody>
                     </table>
                 </div>
@@ -393,14 +411,11 @@ try {
                 <h6 class="mt-3">Column Details:</h6>
                 <ul class="list-unstyled small text-muted">
                     <li><strong>Emp Code</strong> - Employee Code (must match system)</li>
-                    <li><strong>Present Days</strong> - Total present days (can be decimal like 24.5)</li>
+                    <li><strong>Present Days</strong> - Total present days (can be decimal)</li>
                     <li><strong>Extra Days</strong> - Extra/Overtime days worked</li>
                     <li><strong>OT Hours</strong> - Overtime hours</li>
                     <li><strong>WO Days</strong> - Weekly Off days</li>
-                    <li><strong>Adv 1</strong> - Advance 1 deduction amount</li>
-                    <li><strong>Adv 2</strong> - Advance 2 deduction amount</li>
-                    <li><strong>Office Adv</strong> - Office advance deduction</li>
-                    <li><strong>Dress Adv</strong> - Dress advance deduction</li>
+                    <li class="text-warning"><strong>Adv 1/2/Office/Dress</strong> - Saved to employee_advances table</li>
                 </ul>
                 
                 <div class="d-grid gap-2 mt-3">
@@ -417,11 +432,10 @@ try {
             </div>
             <div class="card-body small">
                 <ul class="mb-0">
-                    <li>Employees must already exist in the selected unit</li>
-                    <li>Uploading again for same month will overwrite existing data</li>
-                    <li>Present days can include half days (e.g., 24.5)</li>
-                    <li>Advance amounts will be deducted from salary</li>
-                    <li>Leave advance columns blank or 0 if not applicable</li>
+                    <li>Employees must exist in the selected unit</li>
+                    <li>Uploading again overwrites existing data</li>
+                    <li><strong>Attendance</strong> → <code>attendance_summary</code> table</li>
+                    <li><strong>Advances</strong> → <code>employee_advances</code> table</li>
                 </ul>
             </div>
         </div>
@@ -444,28 +458,23 @@ try {
                                 <th>Unit</th>
                                 <th>Month/Year</th>
                                 <th>Employees</th>
-                                <th>Present Days</th>
-                                <th>Total Advances</th>
+                                <th>Total Present</th>
                                 <th>Uploaded On</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php if (empty($recentUploads)): ?>
                             <tr>
-                                <td colspan="7" class="text-center py-4 text-muted">No uploads yet</td>
+                                <td colspan="6" class="text-center py-4 text-muted">No uploads yet</td>
                             </tr>
                             <?php else: ?>
-                            <?php foreach ($recentUploads as $upload): 
-                                $totalAdv = ($upload['total_adv1'] ?? 0) + ($upload['total_adv2'] ?? 0) + 
-                                            ($upload['total_office_adv'] ?? 0) + ($upload['total_dress_adv'] ?? 0);
-                            ?>
+                            <?php foreach ($recentUploads as $upload): ?>
                             <tr>
                                 <td><?php echo sanitize($upload['client_name'] ?? '-'); ?></td>
                                 <td><?php echo sanitize($upload['unit_name'] ?? '-'); ?></td>
                                 <td><?php echo date('F Y', mktime(0, 0, 0, $upload['month'], 1, $upload['year'])); ?></td>
                                 <td><?php echo number_format($upload['employee_count']); ?></td>
                                 <td><?php echo number_format($upload['total_present'], 1); ?> days</td>
-                                <td>₹<?php echo number_format($totalAdv, 2); ?></td>
                                 <td><?php echo formatDate($upload['updated_at'], 'd-m-Y H:i'); ?></td>
                             </tr>
                             <?php endforeach; ?>
