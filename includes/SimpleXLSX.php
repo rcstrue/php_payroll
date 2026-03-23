@@ -15,14 +15,14 @@ class SimpleXLSX {
             throw new Exception('File not found: ' . $filename);
         }
         
-        $this->parse($filename);
+        $this->loadFile($filename);
     }
     
     public static function parse($filename) {
         return new self($filename);
     }
     
-    private function parse($filename) {
+    private function loadFile($filename) {
         $zip = new ZipArchive();
         
         if ($zip->open($filename) !== true) {
